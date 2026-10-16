@@ -1,0 +1,6 @@
+{
+  "name": "RichConnect AI - Private Rich Girlfriend Finder CRM",
+  "description": "Private luxury CRM & matchmaking intelligence platform to find, track, and genuinely connect with high-net-worth partners with AI-powered conversation coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
