@@ -15,7 +15,8 @@ import {
   Calendar,
   MessageSquare,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  Heart
 } from 'lucide-react';
 import { Match, MatchMessage, Client } from '../types';
 import { getMatchById, getMatchMessages, sendMatchMessage } from '../lib/matchmakingStorage';
@@ -230,6 +231,15 @@ export const PrivateChatPage: React.FC<PrivateChatPageProps> = ({ matchId, onNav
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-3">
+            <button
+              onClick={() => onNavigate('/love-channel')}
+              className="px-3 py-1.5 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-sm"
+              title="Open Our Private Love Channel"
+            >
+              <Heart className="w-3.5 h-3.5 fill-current text-pink-400" />
+              <span className="hidden sm:inline">Love Channel</span>
+            </button>
+
             {partner?.whatsapp && (
               <a
                 href={`https://wa.me/${partner.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${partner.name}, connecting directly via our RichConnect approved introduction!`)}`}

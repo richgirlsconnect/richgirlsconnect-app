@@ -120,6 +120,79 @@ CREATE POLICY "Allow public full access to clients" ON public.clients FOR ALL US
 CREATE POLICY "Allow public full access to matches" ON public.matches FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public full access to match_messages" ON public.match_messages FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow public full access to consultations" ON public.consultations FOR ALL USING (true) WITH CHECK (true);
+
+-- MODE 3: GLOBAL ACQUISITION & DIGITAL MONEY ENGINE
+CREATE TABLE IF NOT EXISTS public.girl_applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    age INTEGER DEFAULT 25,
+    city TEXT NOT NULL,
+    country TEXT NOT NULL,
+    instagram TEXT NOT NULL,
+    net_worth TEXT NOT NULL,
+    what_they_seek TEXT,
+    bio TEXT NOT NULL,
+    image_url TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    referral_code TEXT NOT NULL,
+    referred_by TEXT,
+    fee_paid BOOLEAN DEFAULT false,
+    fee_amount NUMERIC(10, 2) DEFAULT 99.00,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.digital_products (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    subtitle TEXT,
+    price NUMERIC(10, 2) NOT NULL DEFAULT 49.00,
+    type TEXT NOT NULL DEFAULT 'ebook' CHECK (type IN ('ebook', 'course', 'audio')),
+    description TEXT NOT NULL,
+    cover_url TEXT,
+    file_url TEXT,
+    sales INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.marketing_posts (
+    id TEXT PRIMARY KEY,
+    platform TEXT NOT NULL,
+    content TEXT NOT NULL,
+    city_target TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'scheduled', 'published')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.ai_hunts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    niche TEXT NOT NULL,
+    location TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    keywords TEXT,
+    results JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- PRIVATE LOVE CHANNEL: SAFE COUPLES MONETIZATION & MEMORY VAULT
+CREATE TABLE IF NOT EXISTS public.love_channels (
+    id TEXT PRIMARY KEY,
+    couple_id TEXT NOT NULL,
+    memories JSONB NOT NULL DEFAULT '[]'::jsonb,
+    love_points INTEGER DEFAULT 500,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.girl_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.digital_products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.marketing_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_hunts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.love_channels ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all on girl_applications" ON public.girl_applications FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on digital_products" ON public.digital_products FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on marketing_posts" ON public.marketing_posts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on ai_hunts" ON public.ai_hunts FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on love_channels" ON public.love_channels FOR ALL USING (true) WITH CHECK (true);
 `;
 
 export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose }) => {

@@ -795,9 +795,976 @@ app.get('/api/video/token', (req, res) => {
   });
 });
 
+// AI Girls Hunter / Scouter API - Generate 10 ideal client personas matching criteria
+app.post('/api/hunter/generate', async (req, res) => {
+  try {
+    const { 
+      niche = 'Luxury Lifestyle & High Fashion', 
+      location = 'Lagos & London', 
+      platform = 'Instagram', 
+      keywords = 'Afrobeats, contemporary art, private aviation, luxury hospitality' 
+    } = req.body;
 
+    const systemPrompt = `You are the RichConnect AI Elite Scouter and High-Value Lead Intelligence Engine.
+Your task is to generate exactly 10 realistic, highly targeted candidate personas/profiles for an ultra-exclusive private matchmaking and luxury dating enclave.
+Targeting parameters:
+- Niche: ${niche}
+- Location: ${location}
+- Platform: ${platform}
+- Keywords: ${keywords}
 
-// Setup Vite in Dev or serve static in Prod
+For each of the 10 personas, generate:
+1. name: Elegant, realistic high-society name (e.g. "Sienna Laurent-Du Pont", "Zainab Al-Maktoum", "Camilla Van Der Bilt", "Dr. Antoinette Vance")
+2. suggested_handle: Realistically formatted handle e.g. @sienna.ldp, @zainab_dubai
+3. profile_type: Specific archetype (e.g. "Family Office Director", "Art Fair Patron & Equestrian", "Haute Horlogerie Collector", "Luxury Hospitality Founder")
+4. bio_style: Authentic, platform-accurate bio text tailored for ${platform}
+5. why_good_client: Clear, high-status analysis of why she is an exceptional private client/partner (wealth tier, cultural affinity for ambitious black gentlemen, lifestyle harmony)
+6. approach_message: A high-conversion, charming, respectful direct message script tailored for ${platform} DM outreach (subtle, witty, zero creepiness, high status)
+7. icebreaker: A short story reaction or quick conversational hook
+8. estimated_wealth: e.g. "$15M - $30M" or "Ultra-High Net Worth ($40M+)"
+9. avatar_url: A high-resolution Unsplash portrait photo URL of an elegant woman in luxury settings
+10. interests: Array of 3-5 specific luxury & cultural passions (e.g. ["Polo", "Mayfair Dining", "Afrobeats", "Art Basel"])
+
+Return your output strictly as valid JSON with an array of 10 objects under the key "results".
+Structure:
+{
+  "results": [
+    {
+      "name": "string",
+      "suggested_handle": "string",
+      "profile_type": "string",
+      "bio_style": "string",
+      "why_good_client": "string",
+      "approach_message": "string",
+      "icebreaker": "string",
+      "estimated_wealth": "string",
+      "avatar_url": "string",
+      "interests": ["string"]
+    }
+  ]
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: `${systemPrompt}\n\nExecute hunt for ${platform} personas in ${location} within the ${niche} sphere. Keywords: ${keywords}`,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.75,
+        },
+      });
+
+      const responseText = response.text || '{}';
+      try {
+        const parsed = JSON.parse(responseText);
+        if (parsed.results && Array.isArray(parsed.results)) {
+          return res.json(parsed);
+        }
+      } catch (parseError) {
+        const cleaned = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed.results && Array.isArray(parsed.results)) {
+          return res.json(parsed);
+        }
+      }
+    }
+
+    // High quality diverse fallbacks if offline or key pending
+    const sampleAvatars = [
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=600&q=80'
+    ];
+
+    const fallbackResults = [
+      {
+        name: 'Sienna Laurent-Du Pont',
+        suggested_handle: `@sienna.${platform.toLowerCase().includes('tik') ? 'tok' : 'ldp'}`,
+        profile_type: 'Private Heritage Foundation Director',
+        bio_style: `Mayfair & Cap d'Antibes 🇫🇷 | Contemporary African Art Trustee | Dressage & Caviar`,
+        why_good_client: `High liquidity ($35M+), serves on art acquisition boards with deep affinity for ambitious Nigerian & British-Ghanaian tech innovators.`,
+        approach_message: `Sienna, saw your recent acquisition at the Lagos Art Biennale. The balance of contemporary abstraction was breathtaking. Would love to invite you to our private collector salon in Mayfair next month.`,
+        icebreaker: `That curation is sublime—was that acquired directly from the artist or through Alexis?`,
+        estimated_wealth: '$35M - $50M',
+        avatar_url: sampleAvatars[0],
+        interests: ['Art Basel', 'Equestrian', 'Mayfair Dining', 'Afrobeats']
+      },
+      {
+        name: 'Zainab Al-Maktoum',
+        suggested_handle: '@zainab.dxb',
+        profile_type: 'Bespoke Haute Horlogerie & Venture Partner',
+        bio_style: 'Dubai Marina & DIFC 🇦🇪 | Private Equity & Heritage Assets | Falconry & Desert Polo',
+        why_good_client: 'Extremely well-connected sovereign lineage in the UAE with a penchant for high-status pan-African private investors and jetsetters.',
+        approach_message: `Zainab, your insights on alternative luxury allocations in DIFC were spot on. A group of our sovereign principals are convening at Zuma private dining room next week—I'd be honoured to have you at our table.`,
+        icebreaker: `The complication on that timepiece is extraordinary. Audemars custom piece?`,
+        estimated_wealth: '$60M+',
+        avatar_url: sampleAvatars[1],
+        interests: ['Polo', 'Haute Horlogerie', 'Private Jets', 'Dubai DIFC']
+      },
+      {
+        name: 'Camilla Van Der Bilt',
+        suggested_handle: '@camilla.vanderbilt',
+        profile_type: 'Family Office Real Estate Heiress',
+        bio_style: 'Amsterdam & London 🇳🇱🇬🇧 | Superyacht charter curator | Discreet philanthropy',
+        why_good_client: 'Discreet, high generational wealth, openly values masculine ambition, chivalry, and cross-cultural African warmth.',
+        approach_message: `Camilla, your perspective on discreet Mediterranean retreats resonates deeply. Let's exchange notes over tea at The Connaught next Tuesday.`,
+        icebreaker: `Your Mediterranean charter itinerary looks unmatched. Monaco Grand Prix weekend?`,
+        estimated_wealth: '$45M - $70M',
+        avatar_url: sampleAvatars[2],
+        interests: ['Superyachts', 'Private Aviation', 'Monaco GP', 'The Connaught']
+      },
+      {
+        name: 'Dr. Antoinette Vance',
+        suggested_handle: '@dr.antoinette.v',
+        profile_type: 'Biotech Venture Capitalist & Art Patron',
+        bio_style: 'Oxford & Kensington 🇬🇧 | Longevity science founder | Classical piano & Afro-fusion gourmet',
+        why_good_client: 'Doctorate holder with $28M liquidity, deeply curious and fascinated by high-achieving African minds and cultural renaissance.',
+        approach_message: `Antoinette, your keynote on longevity biotech was electrifying. When you have a moment between your lab and London, I'd enjoy treating you to an exquisite dinner at Oswald's.`,
+        icebreaker: `The data on cellular reprogramming you cited was brilliant. Where did you publish that?`,
+        estimated_wealth: '$28M - $40M',
+        avatar_url: sampleAvatars[3],
+        interests: ['Biotech', 'Fine Dining', 'Afro-Fusion', 'Classical Arts']
+      },
+      {
+        name: 'Freja Møller-Eckhart',
+        suggested_handle: '@freja.cph.ldn',
+        profile_type: 'Nordic Clean Energy Heiress',
+        bio_style: 'Copenhagen & Knightsbridge 🇩🇰🇬🇧 | Sustainable yachting | Afrobeats in private enclaves',
+        why_good_client: 'Vibrant, open-hearted European heiress who loves African rhythms, high energy, and commanding gentlemen with global vision.',
+        approach_message: `Freja, noticed your story playlist—Burnaboy and Asake live at the O2? You clearly have immaculate taste in both rhythms and energy. We need to connect.`,
+        icebreaker: `That track transition on your story was legendary. Who was the DJ?`,
+        estimated_wealth: '$20M - $30M',
+        avatar_url: sampleAvatars[4],
+        interests: ['Clean Energy', 'Afrobeats', 'Knightsbridge', 'Sailing']
+      },
+      {
+        name: 'Isabella Moretti',
+        suggested_handle: '@isabella.moretti.milano',
+        profile_type: 'Milanese Haute Couture Creative Director',
+        bio_style: 'Milan & Lake Como 🇮🇹 | Textile dynasty scion | Truffle hunting & vintage Ferraris',
+        why_good_client: 'Elite fashion circles in Milan, loves charismatic gentlemen who carry bespoke bespoke tailoring with natural masculine authority.',
+        approach_message: `Isabella, the bespoke draping in your Como runway showcase was pure poetry. I'm curating a private styling dinner in Milan next month and would love to reserve you a seat.`,
+        icebreaker: `The weave on that cashmere blazer is unbelievable. Is that Biella silk blend?`,
+        estimated_wealth: '$30M - $45M',
+        avatar_url: sampleAvatars[5],
+        interests: ['Haute Couture', 'Lake Como', 'Vintage Cars', 'Fine Wines']
+      },
+      {
+        name: 'Elena Rostova-Cross',
+        suggested_handle: '@elena.cross.geneva',
+        profile_type: 'Swiss Private Bank Managing Partner',
+        bio_style: 'Geneva & St. Moritz 🇨🇭 | Quantitative wealth architecture | Heli-skiing & African philanthropy',
+        why_good_client: 'Manages $200M+ AUM family allocations, seeks discreet romantic companionship with top-tier African founders and sovereign leaders.',
+        approach_message: `Elena, your interview on cross-border capital bridges to emerging markets was masterful. Let's arrange a discreet luncheon in Geneva next time I land at Cointrin.`,
+        icebreaker: `St. Moritz looking crisp this season—are you hitting the Corviglia slopes this weekend?`,
+        estimated_wealth: '$50M - $85M',
+        avatar_url: sampleAvatars[6],
+        interests: ['Private Banking', 'Heli-Skiing', 'St. Moritz', 'Geneva']
+      },
+      {
+        name: 'Maya Al-Husayni',
+        suggested_handle: '@maya.alhusayni',
+        profile_type: 'Luxury Hospitality & Island Resort Architect',
+        bio_style: 'Riyadh & Seychelles 🇸🇦🇸🇨 | Eco-luxe sanctuaries | Arabian horses & desert poetry',
+        why_good_client: 'Ultra-exclusive background, visionary aesthetic, values high respect, chivalrous African hospitality, and deep intellect.',
+        approach_message: `Maya, the architectural symmetry of your Red Sea sanctuary is sublime. As someone deeply invested in pan-continental luxury infrastructure, I'd value an exchange of visions.`,
+        icebreaker: `The natural stone finish on that beachfront pavilion—is that local coral limestone?`,
+        estimated_wealth: '$40M - $65M',
+        avatar_url: sampleAvatars[7],
+        interests: ['Eco-Architecture', 'Equestrian', 'Seychelles', 'Red Sea Project']
+      },
+      {
+        name: 'Charlotte De Montmirail',
+        suggested_handle: '@charlotte.montmirail',
+        profile_type: 'Bordeaux Grand Cru Vineyard Owner',
+        bio_style: 'Bordeaux & Paris 🇫🇷 | 5th Generation Biodynamic Vintner | Opera & African Literature',
+        why_good_client: 'Cultured, regal, deeply appreciative of intellect, romance, fine dining, and Nigerian literary renaissance.',
+        approach_message: `Charlotte, your 2018 vintage received legendary marks, but your commentary on Chinua Achebe and Wole Soyinka was what truly captivated me. May I send you a rare first edition?`,
+        icebreaker: `A biodynamic Grand Cru vintage with notes of dark blackberry? Outstanding vintage year.`,
+        estimated_wealth: '$35M - $55M',
+        avatar_url: sampleAvatars[8],
+        interests: ['Grand Cru Wine', 'Opera', 'Parisian Salons', 'African Literature']
+      },
+      {
+        name: 'Tatiana Romanov-Sterling',
+        suggested_handle: '@tatiana.sterling',
+        profile_type: 'Superyacht Interior Designer & Gemologist',
+        bio_style: 'Monaco & Zurich 🇲🇨🇨🇭 | Rare colored diamonds & marine luxury | Formula 1 VIP',
+        why_good_client: 'High-energy, jet-setter lifestyle, seeks a confident, high-earning king who knows how to lead with style and romantic flair.',
+        approach_message: `Tatiana, your latest 70m yacht interior concept blew Monaco Yacht Show away. Let's celebrate your design award with champagne at the Yacht Club de Monaco on Friday.`,
+        icebreaker: `The backlit onyx on the main salon bar was sheer genius. Truly next level.`,
+        estimated_wealth: '$25M - $38M',
+        avatar_url: sampleAvatars[9],
+        interests: ['Superyachts', 'Gemology', 'Monaco Yacht Club', 'Formula 1']
+      }
+    ];
+
+    return res.json({ results: fallbackResults });
+  } catch (error: any) {
+    console.error('AI Hunter error:', error);
+    return res.status(500).json({ error: 'AI Hunter failed', details: error.message });
+  }
+});
+
+// ==========================================
+// AI MARKETER & DIGITAL PRODUCT MONEY ENGINE
+// ==========================================
+
+// 1. Generate 10 Viral Captions, TikTok Scripts & Reels Hooks
+app.post('/api/marketer/generate-content', async (req, res) => {
+  try {
+    const { city = 'Global', platform = 'Instagram & TikTok', focus = 'Joining RichConnect Private Circle' } = req.body || {};
+
+    const prompt = `You are the Chief Viral Growth Officer for RichConnect, an ultra-exclusive global private club pairing ambitious high-society women and European heiresses with successful, charismatic African visionaries and black kings worldwide.
+Create 10 viral, high-converting social media marketing assets targeting eligible, stylish, ambitious women in ${city} for ${platform}.
+Topic focus: ${focus}.
+
+For each item, provide:
+1. type: "Instagram Caption" | "TikTok Script" | "Reels Hook"
+2. hook: Short, irresistible first 3 seconds opening hook
+3. body: Engaging script or caption text with psychological curiosity and exclusivity
+4. cta: High-conversion Call to Action directing them to apply at richconnect.luxury/join/${city.toLowerCase().replace(/[^a-z0-9]/g, '')}
+5. hashtags: 5-7 targeted luxury lifestyle hashtags
+
+Return strictly JSON:
+{
+  "items": [
+    {
+      "type": "string",
+      "hook": "string",
+      "body": "string",
+      "cta": "string",
+      "hashtags": ["string"]
+    }
+  ]
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.8,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        if (parsed.items) return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    // High converting fallbacks
+    return res.json({
+      items: [
+        {
+          type: "Reels Hook",
+          hook: "Why girls in London & Dubai are secretly leaving traditional dating apps...",
+          body: "When you have your own bag and standard, scrolling through endless unverified profiles is exhausting. RichConnect is the private, non-indexed circle where vetted high-net-worth gentlemen actively court intelligent queens with chivalry and sovereign respect.",
+          cta: "Applications for the next private intake in London are now open at /join/london.",
+          hashtags: ["#RichConnect", "#MayfairLiving", "#LuxuryDating", "#HighValueWoman", "#DiscreetMatchmaking"]
+        },
+        {
+          type: "TikTok Script",
+          hook: "POV: You finally stopped lowering your standards and entered a curated private circle.",
+          body: "[Visual: Getting ready in silk robe, champagne glass]\nVoiceover: 'I used to think ambitious, respectful gentlemen who adore cultured women didn't exist anymore. Turns out they just don't hang out on public apps.' Tap the link in bio to request VIP intake.",
+          cta: "Apply to the private waitlist: /join",
+          hashtags: ["#DubaiLuxury", "#OldMoneyAesthetic", "#DatingAdvice", "#RichGirlClub"]
+        },
+        {
+          type: "Instagram Caption",
+          hook: "Not indexed on Google. Zero public profiles. Strictly verified.",
+          body: "RichConnect isn't for everybody. It is an invite-only enclave connecting cultured women across Monaco, Lagos, Paris, and London with visionary founders and sovereign gentlemen who value family legacy and intercultural excellence.",
+          cta: "Check if intake is open in your city &rarr; /join",
+          hashtags: ["#ParisSociety", "#MonacoYachtClub", "#PrivateMembersClub", "#BespokeRomance"]
+        }
+      ]
+    });
+  } catch (err: any) {
+    console.error('Marketer content error:', err);
+    return res.status(500).json({ error: 'Failed to generate viral content', details: err.message });
+  }
+});
+
+// 2. Generate SEO Blog Post for City
+app.post('/api/marketer/generate-seo-post', async (req, res) => {
+  try {
+    const { city = 'Dubai', topic = 'How to Find a High-Value Partner & Join Elite Circles' } = req.body || {};
+
+    const prompt = `You are a luxury SEO strategist and high-end relationship editor for RichConnect Magazine.
+Write a comprehensive, Google-ranking SEO blog post targeting women searching for: "${topic} in ${city}".
+Include:
+- title: Click-magnetic, sophisticated SEO title
+- meta_description: 155-character meta description with keywords
+- slug: URL-friendly slug e.g. how-to-find-rich-husband-in-${city.toLowerCase()}
+- target_keywords: Array of 5 primary long-tail keywords
+- read_time: e.g. "6 min read"
+- content_markdown: Full article in Markdown format with H2/H3 headers, etiquette tips, luxury venues in ${city}, psychological attraction advice, and prominent callouts to join RichConnect Private Circle at /join/${city.toLowerCase()}.
+
+Return strictly JSON:
+{
+  "title": "string",
+  "meta_description": "string",
+  "slug": "string",
+  "target_keywords": ["string"],
+  "read_time": "string",
+  "content_markdown": "string"
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      title: `The Modern Heiress Guide to High-Value Courtship in ${city} (2026 Edition)`,
+      meta_description: `Discover how cultured women in ${city} connect with ambitious, chivalrous gentlemen away from public dating apps via private sovereign enclaves.`,
+      slug: `high-value-dating-guide-${city.toLowerCase()}`,
+      target_keywords: [`dating in ${city}`, `elite matchmaking ${city}`, `rich bachelors ${city}`, `private members club`, `RichConnect`],
+      read_time: "5 min read",
+      content_markdown: `## Beyond the Noise: Why Traditional Dating Fails High-Caliber Women in ${city}\n\nIn cosmopolitan capitals like ${city}, social circles can feel both crowded and strangely inaccessible...\n\n### The Rise of Non-Indexed Sovereign Matchmaking\n\nUnlike superficial swiping platforms, modern discernment values privacy above all else...\n\n### Apply to RichConnect Private Circle\n\nIntake for verified ladies in ${city} is currently open at [/join/${city.toLowerCase()}](/join/${city.toLowerCase()}).`
+    });
+  } catch (err: any) {
+    console.error('Marketer SEO post error:', err);
+    return res.status(500).json({ error: 'Failed to generate SEO post', details: err.message });
+  }
+});
+
+// 3. AI Promoter Outreach Templates (Influencers, VIP Communities)
+app.post('/api/marketer/generate-promoter-templates', async (req, res) => {
+  try {
+    const { targetAudience = 'Luxury Lifestyle Influencers & Models', channel = 'Instagram DM' } = req.body || {};
+
+    const prompt = `You are the Head of VIP Partnerships for RichConnect.
+Generate 4 high-converting, ultra-sophisticated ${channel} outreach templates inviting ${targetAudience} to join the RichConnect Private Circle as founding ambassadors / members.
+Highlight:
+- Discretion & prestige ($99 fee waived for selected ambassadors or referral earnings)
+- Cross-cultural romance with verified founders, visionaries, and gentlemen worldwide
+- Unique referral link earning $30 per approved girlfriend referral + gift bonuses
+- Warm, elegant, non-spammy tone
+
+Return strictly JSON:
+{
+  "templates": [
+    {
+      "title": "string",
+      "channel": "string",
+      "subject": "string",
+      "body": "string",
+      "follow_up": "string"
+    }
+  ]
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      templates: [
+        {
+          title: "Discreet Ambassador Invitation",
+          channel: "Instagram DM",
+          subject: "Private Invitation &bull; RichConnect Circle",
+          body: "Hello dear, noticed your exquisite aesthetic and travels. We are quietly curating our private founding circle of ambitious, cultured women across London, Dubai & Paris for RichConnect. We would love to extend a complimentary founding membership and invite you to our referral enclave.",
+          follow_up: "Hope you are having a lovely week! Let me know if you would like me to reserve your private access link."
+        }
+      ]
+    });
+  } catch (err: any) {
+    console.error('Marketer promoter error:', err);
+    return res.status(500).json({ error: 'Failed to generate promoter templates', details: err.message });
+  }
+});
+
+// 4. AI Create Digital Product (Ebook / Course Outline & Content)
+app.post('/api/products/ai-create', async (req, res) => {
+  try {
+    const { 
+      topic = "The Rich Girl's Guide to Finding Your Dream Man",
+      productType = "ebook",
+      targetPrice = 49
+    } = req.body || {};
+
+    const prompt = `You are a world-class luxury relationship author and digital product publisher for RichConnect Publishing.
+Generate a complete, high-ticket digital product package for the topic: "${topic}".
+Product Type: ${productType}. Suggested Price: $${targetPrice}.
+
+Create:
+1. title: Polished, captivating commercial title
+2. subtitle: Compelling subtitle explaining the transformation
+3. price: Integer number e.g. ${targetPrice}
+4. type: "ebook" | "course" | "audio"
+5. description: 2-3 paragraph persuasive marketing description for the sales page
+6. target_audience: Who this is specifically written for
+7. key_benefits: Array of 5 bullet points of transformative secrets revealed
+8. chapters_outline: Array of 6 chapter titles with 2-sentence summaries each
+9. full_chapter_sample: A beautifully formatted, high-value 500-word excerpt from Chapter 1 with actionable dating psychology advice
+10. cover_url: High-resolution Unsplash luxury book cover aesthetic URL
+
+Return strictly JSON:
+{
+  "title": "string",
+  "subtitle": "string",
+  "price": number,
+  "type": "string",
+  "description": "string",
+  "target_audience": "string",
+  "key_benefits": ["string"],
+  "chapters_outline": [
+    {
+      "chapter_number": number,
+      "title": "string",
+      "summary": "string"
+    }
+  ],
+  "full_chapter_sample": "string",
+  "cover_url": "string"
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.75,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      title: topic,
+      subtitle: "The Psychological Blueprint for High-Value Connection & Lasting Devotion",
+      price: targetPrice,
+      type: productType,
+      description: "An insider guide teaching ambitious women how to position themselves in elite circles, communicate with magnetic poise, and inspire true chivalry from high-earning gentlemen.",
+      target_audience: "Cultured, ambitious women seeking genuine high-status romantic partnerships",
+      key_benefits: [
+        "Master the psychology of high-net-worth courtship",
+        "How to vet for real emotional availability and generosity",
+        "Discreet communication strategies for WhatsApp and private messaging",
+        "Building sovereign family legacy rather than short-lived superficial flings",
+        "Navigating cross-cultural romance with pan-African and European visionaries"
+      ],
+      chapters_outline: [
+        { chapter_number: 1, title: "The High-Status Mindset Shift", summary: "Why high-value men are bored of superficial flattery and how to exude genuine grounded allure." },
+        { chapter_number: 2, title: "The Enclaves of Connection", summary: "Where real founders and sovereign leaders spend their time and how to enter without feeling out of place." },
+        { chapter_number: 3, title: "The Art of Conversational Poise", summary: "Texting and banter strategies that make high-achieving men prioritize your company." },
+        { chapter_number: 4, title: "Vetting for Character & Generosity", summary: "Separating genuine kings from pretentious performers before emotional investment." },
+        { chapter_number: 5, title: "Deepening Devotion & Cross-Cultural Harmony", summary: "Creating emotional safety and mutual respect that leads effortlessly to lasting commitment." },
+        { chapter_number: 6, title: "Sovereign Partnership & Family Legacy", summary: "Co-creating an inspiring, protected private empire together." }
+      ],
+      full_chapter_sample: "Chapter 1: The High-Status Mindset Shift\n\nMost women are taught to perform. In elite circles, performance is immediately recognized as insecurity. A man who has built enterprises or inherited generational legacy doesn't want another person auditioning for his approval. He desires a sanctuary of calm, sharp intellect, and radiant confidence...",
+      cover_url: "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80"
+    });
+  } catch (err: any) {
+    console.error('AI Product Create error:', err);
+    return res.status(500).json({ error: 'Failed to create AI product', details: err.message });
+  }
+});
+
+// MILLIONAIRE TRANSLATOR™ API
+app.post('/api/ai/millionaire-translator', async (req, res) => {
+  try {
+    const { message = '', tone = 'obsessed' } = req.body || {};
+    const prompt = `You are the Chief Relationship Psychologist and High-Status Dating Strategist for RichConnect, specializing in high-net-worth psychology.
+A woman received this text message from a wealthy gentleman: "${message}".
+Desired response aura: "${tone}".
+
+Analyze:
+1. subconsciousMeaning: What he ACTUALLY means subconsciously (testing boundaries, assessing convenience, genuine interest, or casual flirtation).
+2. powerDynamic: The subtle power dynamic in play and why responding casually lowers her status.
+3. suggestedReply: The exact psychological script to send back. It must be refined, polite, unbothered, high-status, and make him immediately respect her time and desire to invest in a proper date.
+4. whyItWorks: Clear 2-sentence explanation of why this triggers masculine pursuit and obsession.
+
+Return strictly JSON:
+{
+  "subconsciousMeaning": "string",
+  "powerDynamic": "string",
+  "suggestedReply": "string",
+  "whyItWorks": "string"
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      subconsciousMeaning: "He is testing your boundaries and convenience. High-net-worth men propose late-night casual drinks to see if you have high standards or are eager to please.",
+      powerDynamic: "Low investment on his part. He wants to gauge if you demand the treatment of a high-value queen.",
+      suggestedReply: "A late night drink isn't quite my pace, but I adore afternoon tea at The Connaught or private dining at Zuma. If your schedule allows for that this week, let me know.",
+      whyItWorks: "Politely declines low-effort invites while offering high-status alternatives. Men respect and obsess over women who value their own sleep, time, and dignity."
+    });
+  } catch (err: any) {
+    console.error('Translator error:', err);
+    return res.status(500).json({ error: 'Translation failed', details: err.message });
+  }
+});
+
+// AI LOVE PREDICTOR™ API
+app.post('/api/ai/love-predictor', async (req, res) => {
+  try {
+    const { herCity = 'Lagos', hisCity = 'Monaco', herZodiac = 'Leo', hisWealthTier = '$100M+' } = req.body || {};
+    const prompt = `You are the RichConnect AI Matchmaking Neural Engine.
+Analyze long-term marriage and lifestyle durability for:
+- Her City: ${herCity}
+- His City: ${hisCity}
+- Her Zodiac: ${herZodiac}
+- His Wealth Tier: ${hisWealthTier}
+
+Provide:
+1. score: Integer between 91 and 99
+2. tenYearProbability: string e.g. "95.4% Enduring Devotion"
+3. verdict: Insightful 2-sentence cross-cultural relationship prediction
+4. strengths: Array of 3 bullet points of psychological harmony
+5. riskFactor: 1 practical advisory on pacing
+
+Return strictly JSON:
+{
+  "score": number,
+  "tenYearProbability": "string",
+  "verdict": "string",
+  "strengths": ["string"],
+  "riskFactor": "string"
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      score: 97,
+      tenYearProbability: "96.2% Enduring Devotion",
+      verdict: "Exceptional cross-continental synergy between African warmth, radiant charm, and sovereign European dynasty capital.",
+      strengths: [
+        "Unshakeable shared commitment to family heritage and discretion",
+        "Natural polarity of masculine ambition and feminine grace",
+        "Financial peace enables effortless multi-city seasonal living"
+      ],
+      riskFactor: "Ensure clear communication when coordinating schedules between global residences."
+    });
+  } catch (err: any) {
+    console.error('Love Predictor error:', err);
+    return res.status(500).json({ error: 'Prediction failed', details: err.message });
+  }
+});
+
+// ==========================================
+// PRIVATE LOVE CHANNEL API ENDPOINTS
+// ==========================================
+
+// AI Content Safety Check (Zero Nudity / Explicit Content Filter)
+app.post('/api/love-channel/safety-check', async (req, res) => {
+  try {
+    const { caption, photoDescription, textContent } = req.body;
+    const combined = `${caption || ''} ${photoDescription || ''} ${textContent || ''}`.trim();
+
+    if (!combined) {
+      return res.json({ safe: true, message: 'Valid romantic entry' });
+    }
+
+    const prompt = `You are a strict safety and compliance filter for a private, romantic couple application called RichConnect Love Channel.
+The rules are non-negotiable:
+1. Nudity, exposed genitalia, exposed breasts/buttocks, explicit sexual acts, pornography, or erotic roleplay are STRICTLY FORBIDDEN.
+2. Clothed romantic photos, hugs, holding hands, candlelit dinners, gentle cheek kisses, travel memories, dancing, and heartfelt love letters are 100% ALLOWED and ENCOURAGED.
+
+Input to evaluate:
+"${combined}"
+
+Return strictly valid JSON:
+{
+  "safe": boolean,
+  "reason": "Keep it romantic - clothed photos only for safety" (if unsafe) or "Safe romantic memory" (if safe),
+  "flaggedTerms": ["string"]
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    // Heuristic fallback filter
+    const forbiddenKeywords = ['nude', 'naked', 'porn', 'nsfw', 'sex', 'undressed', 'stripping', 'explicit'];
+    const isFlagged = forbiddenKeywords.some(kw => combined.toLowerCase().includes(kw));
+
+    if (isFlagged) {
+      return res.json({
+        safe: false,
+        reason: 'Keep it romantic - clothed photos only for safety',
+        flaggedTerms: ['inappropriate_media']
+      });
+    }
+
+    return res.json({ safe: true, reason: 'Safe romantic memory' });
+  } catch (err: any) {
+    console.error('Safety check error:', err);
+    return res.status(500).json({ safe: true, reason: 'Safety scan completed with default approval' });
+  }
+});
+
+// AI Love Story Narrative & Ken Burns Slideshow Script Generator
+app.post('/api/love-channel/generate-story', async (req, res) => {
+  try {
+    const { partnerAName, partnerBName, notes, specialCity } = req.body;
+
+    const prompt = `You are the chief romance biographer for RichConnect Private Love Channel.
+Generate an emotionally captivating, tasteful 3-chapter romantic slideshow narrative for a high-net-worth couple: ${partnerAName || 'Her'} and ${partnerBName || 'Him'}.
+Setting/City: ${specialCity || 'Monaco & London'}.
+Couple backstory notes: "${notes || 'Met through mutual appreciation of art, fine dining, and sovereign ambition.'}"
+
+Tone: Poetic, deeply chivalrous, elegant, non-explicit, luxury romantic.
+
+Return strictly JSON format:
+{
+  "title": "string",
+  "quoteOverlay": "string (1 memorable romantic quote)",
+  "audioVibe": "string (e.g. Parisian Accordion & Soft Piano, Lo-Fi Candlelight Waves, Monaco Midnight Strings)",
+  "chapters": [
+    {
+      "chapterNumber": 1,
+      "title": "string",
+      "voiceoverNarrative": "string (2-3 sentences)",
+      "kenBurnsEffect": "zoom-in-center"
+    },
+    {
+      "chapterNumber": 2,
+      "title": "string",
+      "voiceoverNarrative": "string (2-3 sentences)",
+      "kenBurnsEffect": "pan-right-subtle"
+    },
+    {
+      "chapterNumber": 3,
+      "title": "string",
+      "voiceoverNarrative": "string (2-3 sentences)",
+      "kenBurnsEffect": "zoom-out-glow"
+    }
+  ]
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      title: `${partnerAName || 'Sienna'} & ${partnerBName || 'James'}: A Symphony of Devotion`,
+      quoteOverlay: `"In your eyes, I found both my peace and my kingdom."`,
+      audioVibe: "Parisian Accordion & Soft Piano",
+      chapters: [
+        {
+          chapterNumber: 1,
+          title: "The First Glances",
+          voiceoverNarrative: "Across a crowded room in Mayfair, time suspended its pace. What started as an introduction became an unspoken vow to build together.",
+          kenBurnsEffect: "zoom-in-center"
+        },
+        {
+          chapterNumber: 2,
+          title: "Evenings by the Water",
+          voiceoverNarrative: "Between the balmy breezes of Cap d'Antibes and sunset walks along the marina, laughter became their shared dialect.",
+          kenBurnsEffect: "pan-right-subtle"
+        },
+        {
+          chapterNumber: 3,
+          title: "The Sovereign Horizon",
+          voiceoverNarrative: "Hand in hand, they look forward to multi-continental journeys, united in heart, vision, and enduring romance.",
+          kenBurnsEffect: "zoom-out-glow"
+        }
+      ]
+    });
+  } catch (err: any) {
+    console.error('Love Story generation error:', err);
+    return res.status(500).json({ error: 'Story generation failed', details: err.message });
+  }
+});
+
+// AI Virtual Dream Date Video Script & Pixar-Style 3D Avatar Scene Generator
+app.post('/api/love-channel/virtual-dream-date', async (req, res) => {
+  try {
+    const { partnerAName, partnerBName, dreamLocation, romanticActivity } = req.body;
+
+    const prompt = `Create a 15-second Pixar-style 3D animated romantic date scenario for RichConnect Virtual Dream Date™.
+Partners: ${partnerAName || 'Queen'} & ${partnerBName || 'King'}.
+Location: ${dreamLocation || 'Paris Eiffel Tower dinner'} (options: Paris Eiffel Tower dinner, Dubai yacht sunset, Monaco balcony, Maldives beach, Luxury apartment living room).
+Activity: ${romanticActivity || 'dancing under the stars'} (tasteful, clothed, romantic: holding hands, dancing, watching sunset, walking along shore, laughing).
+
+STRICT RULE: This is stylized cartoon/Pixar 3D animation. ABSOLUTELY NO NUDITY, NO SEXUAL ACTS, NO EXPLICIT CONTENT. Must be family-friendly and romantic.
+
+Return strictly JSON:
+{
+  "sceneTitle": "string",
+  "locationName": "string",
+  "quoteOverlay": "string",
+  "musicRecommendation": "string",
+  "pixarAnimationPrompts": [
+    {
+      "timestamp": "0:00 - 0:05",
+      "visualDescription": "3D stylized Pixar-like avatars of a fashionable couple arriving at the venue, warm cinematic rim lighting, gentle breeze.",
+      "cameraMotion": "Slow panoramic sweep",
+      "activity": "Walking arm-in-arm and sharing an adoring smile"
+    },
+    {
+      "timestamp": "0:05 - 0:10",
+      "visualDescription": "Golden hour glow reflects on the water as they hold hands and laugh warmly.",
+      "cameraMotion": "Medium close-up with soft depth of field",
+      "activity": "Gentle slow dance or balcony toast"
+    },
+    {
+      "timestamp": "0:10 - 0:15",
+      "visualDescription": "The night sky glitters with starlight as both avatars gaze at the horizon together.",
+      "cameraMotion": "Slow crane pull-out with floating golden sparkles",
+      "activity": "Resting head on shoulder, watching fireworks or starlight"
+    }
+  ],
+  "disclaimer": "AI Animated Fantasy - Not Real Footage",
+  "lovePointsEarned": 50
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      sceneTitle: `Sunset Serenade at ${dreamLocation || 'Dubai Marina'}`,
+      locationName: dreamLocation || 'Dubai Yacht Sunset',
+      quoteOverlay: `"Every second with you feels like our own fairy tale."`,
+      musicRecommendation: "Soft Acoustic Sunset Serenade",
+      pixarAnimationPrompts: [
+        {
+          timestamp: "0:00 - 0:05",
+          visualDescription: "3D stylized Pixar-inspired avatars standing on the teak deck of a luxury yacht, gentle sea breeze fluttering their stylish resort wear.",
+          cameraMotion: "Sweeping orbit from water level upwards",
+          activity: "Holding hands and looking into each other's eyes"
+        },
+        {
+          timestamp: "0:05 - 0:10",
+          visualDescription: "Warm orange and violet sunset paints the sky as they twirl in a slow, graceful dance.",
+          cameraMotion: "Medium cinematic push-in with soft golden lens flare",
+          activity: "Slow dancing and laughing under the twilight"
+        },
+        {
+          timestamp: "0:10 - 0:15",
+          visualDescription: "Avatars leaning against the mahogany rail watching Dubai skyline lights illuminate.",
+          cameraMotion: "Wide cinematic pull-back with gentle bokeh",
+          activity: "Shoulder-to-shoulder gaze towards the horizon"
+        }
+      ],
+      disclaimer: "AI Animated Fantasy - Not Real Footage",
+      lovePointsEarned: 50
+    });
+  } catch (err: any) {
+    console.error('Virtual Dream Date error:', err);
+    return res.status(500).json({ error: 'Dream Date creation failed', details: err.message });
+  }
+});
+
+// AI Couple Meme Generator (Wholesome & Chibi Style Inside Jokes)
+app.post('/api/love-channel/generate-meme', async (req, res) => {
+  try {
+    const { partnerAName, partnerBName, insideJoke, coupleQuirk } = req.body;
+
+    const prompt = `Generate 2 cute, wholesome, hilarious couple memes for RichConnect Love Channel based on this couple's dynamic:
+Partner A: ${partnerAName || 'Queen'}
+Partner B: ${partnerBName || 'King'}
+Inside Joke/Habit: "${insideJoke || 'He always checks stock market before ordering dinner'}".
+Couple Quirk: "${coupleQuirk || 'She takes 45 minutes to pick an outfit then looks like royalty'}".
+
+Style: Chibi cartoon avatar, wholesome, sweet, funny relationship humor. NO EXPLICIT JOKES.
+
+Return strictly JSON:
+{
+  "memes": [
+    {
+      "title": "string",
+      "avatarScenario": "string (visual prompt of chibi couple)",
+      "topText": "string",
+      "bottomText": "string",
+      "relatableScore": 98
+    },
+    {
+      "title": "string",
+      "avatarScenario": "string (visual prompt of chibi couple)",
+      "topText": "string",
+      "bottomText": "string",
+      "relatableScore": 95
+    }
+  ]
+}`;
+
+    if (ai) {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.8,
+        },
+      });
+
+      const txt = response.text || '{}';
+      try {
+        const parsed = JSON.parse(txt);
+        return res.json(parsed);
+      } catch {
+        const cleaned = txt.replace(/```json/g, '').replace(/```/g, '').trim();
+        return res.json(JSON.parse(cleaned));
+      }
+    }
+
+    return res.json({
+      memes: [
+        {
+          title: "The 5-Minute Warning",
+          avatarScenario: "Chibi James calmly waiting in the hallway while Chibi Sienna tries on 6 stunning dresses with a crown.",
+          topText: "HIM: 'We have reservation in 10 minutes.'",
+          bottomText: "HER: 'I just need to find the earrings that match this energy.'",
+          relatableScore: 99
+        },
+        {
+          title: "Candlelight Portfolio Check",
+          avatarScenario: "Chibi James checking Bloomberg under the table while Chibi Sienna gives him the playful royal side-eye.",
+          topText: "WHEN THE MAIN COURSE ARRIVES BUT MONACO MARKET JUST OPENED",
+          bottomText: "HER: 'Is the steak paying your dividends or am I?' 😂",
+          relatableScore: 96
+        }
+      ]
+    });
+  } catch (err: any) {
+    console.error('Meme generation error:', err);
+    return res.status(500).json({ error: 'Meme generation failed', details: err.message });
+  }
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

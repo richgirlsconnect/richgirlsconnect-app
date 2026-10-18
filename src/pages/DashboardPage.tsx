@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   MessageCircle, 
@@ -20,6 +20,9 @@ import {
   Bell
 } from 'lucide-react';
 import { Girl, PipelineStage } from '../types';
+import { LiveGirlsGallery } from '../components/LiveGirlsGallery';
+import { WowFeaturesSection } from '../components/WowFeaturesSection';
+import { SmartPaywallModal } from '../components/SmartPaywallModal';
 
 interface DashboardPageProps {
   girls: Girl[];
@@ -64,65 +67,76 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   ];
 
   const topMatches = [...girls].sort((a, b) => b.match_score - a.match_score).slice(0, 3);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-12 pb-16">
       
       {/* Luxury Welcome Hero */}
-      <div className="relative rounded-2xl overflow-hidden border border-amber-500/25 bg-gradient-to-r from-[#0d101a] via-[#121624] to-[#090b12] p-6 sm:p-8 shadow-xl">
-        <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-radial from-amber-500/10 via-transparent to-transparent pointer-events-none" />
+      <div className="relative rounded-3xl overflow-hidden border-2 border-amber-500/35 bg-gradient-to-r from-[#0d101a] via-[#141829] to-[#090b12] p-6 sm:p-10 shadow-2xl">
+        <div className="absolute right-0 top-0 bottom-0 w-1/2 bg-radial from-amber-500/15 via-transparent to-transparent pointer-events-none" />
         
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Private High-Value Matchmaking Intelligence</span>
+        <div className="relative z-10 max-w-4xl space-y-4">
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-wider">
+            <Crown className="w-4 h-4 text-amber-400" />
+            <span>Monaco &bull; Dubai &bull; Lagos &bull; London &bull; Paris &bull; NYC</span>
           </div>
 
-          <h1 className="text-2xl sm:text-4xl font-serif-luxury font-bold text-slate-100 tracking-wide leading-tight">
-            Welcome to <span className="gold-gradient-text">RichConnect AI</span>
+          <h1 className="text-2xl sm:text-4xl lg:text-5xl font-serif-luxury font-bold text-white tracking-tight leading-tight">
+            The World's First AI Matchmaking Empire Where <span className="gold-gradient-text">Rich Girls Find Their Dream Man</span> And Poor Girls Become Rich
           </h1>
 
-          <p className="mt-2 text-sm sm:text-base text-slate-300 font-normal leading-relaxed">
-            Your private relationship CRM tracking verified high-net-worth women who openly appreciate black gentlemen. 
-            Supercharge your connection strategy with memory dossier tracking and real-time Gemini AI wingman advice.
+          <p className="text-sm sm:text-base text-amber-200/90 font-medium leading-relaxed max-w-3xl">
+            "We are not Tinder. We are not OnlyFans. We are The Private Circle Where Monaco Millionaires Seek African Queens. 31 Countries. One Secret Door."
           </p>
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="pt-2 flex flex-wrap gap-3">
             <button
-              onClick={() => onNavigate('/presidential')}
-              className="px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-slate-950 shadow-lg shadow-amber-500/30 flex items-center space-x-2 transition-all cursor-pointer"
+              onClick={() => onNavigate('/join')}
+              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:brightness-110 text-slate-950 shadow-xl shadow-amber-500/30 flex items-center space-x-2 transition-all cursor-pointer"
             >
-              <Award className="w-4 h-4 text-slate-950" />
-              <span>Presidential Daughters Suite ({girls.filter(g => g.is_presidential_daughter).length} Active)</span>
-              <ArrowRight className="w-4 h-4" />
+              <Crown className="w-4 h-4 text-slate-950" />
+              <span>Join Sovereign Circle (Girls &amp; Queens) &rarr;</span>
             </button>
 
             <button
-              onClick={() => onNavigate('/finder')}
-              className="px-5 py-2.5 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 flex items-center space-x-2 transition-all cursor-pointer"
-            >
-              <Compass className="w-4 h-4 text-amber-400" />
-              <span>Explore Finder Filters</span>
-            </button>
-
-            <button
-              onClick={() => onNavigate('/pipeline')}
-              className="px-4 py-2.5 rounded-xl font-medium text-xs sm:text-sm bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 flex items-center space-x-2 transition-all cursor-pointer"
-            >
-              <Kanban className="w-4 h-4 text-amber-400" />
-              <span>Pipeline</span>
-            </button>
-
-            <button
-              onClick={() => onNavigate('/matchmaking')}
-              className="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-400/20 to-amber-600/20 hover:from-amber-400/30 hover:to-amber-600/30 text-amber-200 border border-amber-400/40 flex items-center space-x-2 transition-all cursor-pointer shadow-sm"
+              onClick={() => onNavigate('/pricing')}
+              className="px-5 py-3 rounded-xl font-bold text-xs sm:text-sm bg-slate-900/90 hover:bg-slate-800 text-amber-300 border border-amber-500/40 flex items-center space-x-2 transition-all cursor-pointer shadow-md"
             >
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Mode 2: Elite Matchmaking &rarr;</span>
+              <span>Explore Membership Plans &bull; Free $0 / $99</span>
+            </button>
+
+            <button
+              onClick={() => onNavigate('/presidential')}
+              className="px-5 py-3 rounded-xl font-semibold text-xs sm:text-sm bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 flex items-center space-x-2 transition-all cursor-pointer"
+            >
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>Presidential Suite ({girls.filter(g => g.is_presidential_daughter).length})</span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* PART 1: VIRTUAL GHOST GIRLS LIVE SHOWCASE */}
+      <LiveGirlsGallery 
+        onNavigate={onNavigate} 
+        onOpenPaywall={() => setIsPaywallOpen(true)} 
+      />
+
+      {/* PART 2: 5 MIND-BLOWING WOW PITCHES & NEVER-SEEN FEATURES */}
+      <WowFeaturesSection 
+        onNavigate={onNavigate} 
+        onOpenPaywall={() => setIsPaywallOpen(true)} 
+      />
+
+      {/* SMART PAYWALL MODAL */}
+      <SmartPaywallModal
+        isOpen={isPaywallOpen}
+        onClose={() => setIsPaywallOpen(false)}
+        onNavigate={onNavigate}
+        targetFeature="Monaco Millionaire Unveil"
+      />
 
       {/* Mode 2: Elite Private Matchmaking Feature Callout */}
       <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-r from-[#0c0f1a] via-[#101424] to-[#0c0f1a] p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -40,6 +40,23 @@ export const getSupabase = (): SupabaseClient | null => {
   return null;
 };
 
+export const isSupabaseConfigured = (): boolean => {
+  const { url, anonKey } = getSupabaseConfig();
+  return Boolean(url && anonKey && url.startsWith('http') && !url.includes('placeholder'));
+};
+
+// Direct export of supabase instance with proxy fallback so imports like `import { supabase } from '../lib/supabase'` work seamlessly
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    const client = getSupabase();
+    if (!client) {
+      const fallback = createClient('https://placeholder.supabase.co', 'placeholder-anon-key');
+      return (fallback as any)[prop];
+    }
+    return (client as any)[prop];
+  }
+});
+
 export const saveCustomSupabaseConfig = (url: string, anonKey: string) => {
   localStorage.setItem('rc_custom_supabase_config', JSON.stringify({ url, anonKey }));
   supabaseInstance = null; // reset instance

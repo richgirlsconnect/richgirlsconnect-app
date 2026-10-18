@@ -19,7 +19,14 @@ import {
   Heart,
   Video,
   Cpu,
-  Users
+  Users,
+  Compass,
+  User,
+  Globe2,
+  ShoppingBag,
+  TrendingUp,
+  Flame,
+  Tv
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -64,24 +71,44 @@ export const Navigation: React.FC<NavigationProps> = ({
   }
 
   const mode1Items: NavItem[] = [
-    { name: 'Discover', path: '/swipe', icon: Heart, highlight: true },
+    { name: 'Love TV', path: '/love-tv', icon: Tv, badge: 'LIVE', highlight: true },
+    { name: 'Discover', path: '/swipe', icon: Heart },
+    { name: 'Social Command', path: '/admin/social-command', icon: Flame, badge: 'Viral' },
+    { name: 'Love Channel', path: '/love-channel', icon: Heart, badge: 'Couples' },
+    { name: 'Join Circle', path: '/join', icon: Globe2, badge: 'Worldwide' },
+    { name: 'Marketplace', path: '/marketplace', icon: ShoppingBag, badge: '$' },
+    { name: 'Pricing', path: '/pricing', icon: Sparkles, badge: 'Plans' },
+    { name: 'TV Studio', path: '/admin/love-tv', icon: Tv },
+    { name: 'AI Marketer', path: '/admin/marketer', icon: TrendingUp },
+    { name: 'AI Hunter', path: '/hunter', icon: Compass, badge: 'Scouter' },
     { name: 'AI Agents', path: '/agents', icon: Cpu, badge: '3' },
     { name: 'Video Suite', path: '/video-call', icon: Video },
     { name: 'Dashboard', path: '/', icon: Crown },
     { name: 'Finder', path: '/finder', icon: Search },
-    { name: 'Presidential Suite', path: '/presidential', icon: Award },
+    { name: 'Presidential', path: '/presidential', icon: Award },
     { name: 'Pipeline', path: '/pipeline', icon: Kanban },
     { name: 'Inbox', path: '/inbox', icon: MessageSquare, badge: unreadCount },
+    { name: 'Client Portal', path: '/client', icon: User },
   ];
 
   const mode2Items: NavItem[] = [
-    { name: 'Discover / Swipe', path: '/swipe', icon: Heart },
+    { name: 'Love TV', path: '/love-tv', icon: Tv, badge: 'LIVE', highlight: true },
+    { name: 'Discover', path: '/swipe', icon: Heart },
+    { name: 'Social Command', path: '/admin/social-command', icon: Flame, badge: 'Viral' },
+    { name: 'Love Channel', path: '/love-channel', icon: Heart, badge: 'Couples' },
+    { name: 'Join Circle', path: '/join', icon: Globe2, badge: 'Worldwide' },
+    { name: 'Marketplace', path: '/marketplace', icon: ShoppingBag, badge: '$' },
+    { name: 'Pricing', path: '/pricing', icon: Sparkles, badge: 'Plans' },
+    { name: 'TV Studio', path: '/admin/love-tv', icon: Tv },
+    { name: 'AI Marketer', path: '/admin/marketer', icon: TrendingUp },
+    { name: 'AI Hunter', path: '/hunter', icon: Compass, badge: 'Scouter' },
     { name: 'AI Agents Hub', path: '/agents', icon: Cpu },
     { name: 'Matchmaking', path: '/matchmaking', icon: Sparkles },
     { name: 'Apply Form', path: '/apply', icon: PlusCircle },
     { name: 'Private Clients', path: '/admin/clients', icon: Users },
     { name: 'AI Matches', path: '/admin/matches', icon: Award },
     { name: 'Chat Monitor', path: '/admin/chats', icon: MessageSquare },
+    { name: 'Client Portal', path: '/client', icon: User },
   ];
 
   const activeNavItems: NavItem[] = isMode2 ? mode2Items : mode1Items;

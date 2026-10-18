@@ -17,10 +17,15 @@ import {
   DollarSign,
   Heart,
   Globe2,
-  Lock
+  Lock,
+  Upload,
+  Loader2,
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Client, Match } from '../types';
 import { getClients, saveClient, deleteClient, getMatches, saveMatch } from '../lib/matchmakingStorage';
+import { supabase } from '../lib/supabase';
 
 interface AdminClientsPageProps {
   onNavigate: (path: string) => void;
@@ -37,6 +42,7 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
 
   // New Client Form in Modal
   const [newName, setNewName] = useState('');
+  const [newInstagram, setNewInstagram] = useState('');
   const [newAge, setNewAge] = useState(29);
   const [newGender, setNewGender] = useState<'Male' | 'Female' | 'Other'>('Female');
   const [newLocation, setNewLocation] = useState('London & Monaco');
@@ -47,6 +53,14 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
   const [newWhatsapp, setNewWhatsapp] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newAvatar, setNewAvatar] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80');
+
+  // Supabase Image Upload & Storage State
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
 
   const matches = getMatches();
 
@@ -104,18 +118,87 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
     }
   };
 
+  const handleUploadAndInsert = async (fileToUpload: File, clientName: string, clientInstagram: string): Promise<string | null> => {
+    setIsLoading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    try {
+      const fileName = `${Date.now()}-${fileToUpload.name}`;
+      const uploadRes = await supabase.storage.from('client-images').upload(fileName, fileToUpload);
+      if (uploadRes.error) {
+        throw new Error(uploadRes.error.message || 'Failed to upload image to Supabase storage bucket client-images');
+      }
+
+      const { data: { publicUrl: generatedUrl } } = supabase.storage.from('client-images').getPublicUrl(fileName);
+
+      const insertRes = await supabase.from('rich_girls').insert([
+        { 
+          name: clientName, 
+          instagram: clientInstagram, 
+          image_url: generatedUrl 
+        }
+      ]);
+      if (insertRes.error) {
+        throw new Error(insertRes.error.message || 'Failed to insert client into rich_girls table');
+      }
+
+      setPublicUrl(generatedUrl);
+      setUploadSuccess(`Successfully uploaded to bucket 'client-images' and inserted into 'rich_girls'!`);
+      return generatedUrl;
+    } catch (err: any) {
+      console.error('Supabase error:', err);
+      const msg = err?.message || 'Error uploading image or inserting client into Supabase.';
+      setUploadError(msg);
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setUploadError(null);
+    setUploadSuccess(null);
+    setPublicUrl(null);
+
+    // If client name is already filled, automatically run the upload & insert
+    if (newName.trim()) {
+      const ig = newInstagram.trim() || `@${newName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      await handleUploadAndInsert(file, newName.trim(), ig);
+    }
+  };
+
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
 
+    let finalImageUrl = publicUrl || newAvatar;
+
+    // If file was selected but not uploaded yet (or re-upload needed):
+    if (selectedFile && !publicUrl) {
+      const ig = newInstagram.trim() || `@${newName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+      const uploadedUrl = await handleUploadAndInsert(selectedFile, newName.trim(), ig);
+      if (uploadedUrl) {
+        finalImageUrl = uploadedUrl;
+      } else {
+        // Keep modal open so user sees error and can fix or retry
+        return;
+      }
+    }
+
     const created: Client = {
       id: 'client-' + Date.now(),
       name: newName.trim(),
-      age: Number(newAge),
+      age: Number(newAge) || 28,
       gender: newGender,
       location: newLocation.trim(),
-      avatar_url: newAvatar,
-      photos: [newAvatar],
+      avatar_url: finalImageUrl,
+      photos: [finalImageUrl],
       partner_preference: newPartnerPref,
       wealth_level: newWealth,
       bio: newBio.trim(),
@@ -131,6 +214,13 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
 
     await saveClient(created);
     setShowAddModal(false);
+    setNewName('');
+    setNewInstagram('');
+    setSelectedFile(null);
+    setImagePreview(null);
+    setPublicUrl(null);
+    setUploadError(null);
+    setUploadSuccess(null);
     handleRefresh();
   };
 
@@ -522,16 +612,106 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
             </h3>
 
             <form onSubmit={handleCreateClient} className="space-y-3.5 text-xs">
-              <div>
-                <label className="block text-slate-300 font-medium mb-1">Full Legal Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="e.g. Lady Genevieve Vance"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none"
-                />
+              {/* Error Alert */}
+              {uploadError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-rose-200">Supabase Upload / Insert Error</p>
+                    <p className="text-[11px] text-rose-300/90 break-words mt-0.5">{uploadError}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Success Alert */}
+              {uploadSuccess && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 flex items-start space-x-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-emerald-200">Supabase Upload Complete</p>
+                    <p className="text-[11px] text-emerald-300/90 break-words mt-0.5">{uploadSuccess}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Name & Instagram */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Full Legal Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Lady Genevieve Vance"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Instagram (@handle) *</label>
+                  <input
+                    type="text"
+                    value={newInstagram}
+                    onChange={(e) => setNewInstagram(e.target.value)}
+                    placeholder="e.g. @genevieve_vance"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* Image File Input (Uploads to Supabase 'client-images' bucket & inserts to 'rich_girls' table) */}
+              <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-slate-200 font-semibold text-xs flex items-center space-x-1.5">
+                    <Upload className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Client Image (Supabase Storage: bucket 'client-images')</span>
+                  </label>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 font-mono border border-amber-500/20">
+                    table: rich_girls
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  {imagePreview ? (
+                    <img 
+                      src={imagePreview} 
+                      alt="Preview" 
+                      className="w-14 h-14 rounded-lg object-cover border border-amber-500/50 shadow-md shrink-0" 
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-slate-800 border border-slate-700 flex flex-col items-center justify-center text-slate-500 shrink-0">
+                      <ImageIcon className="w-6 h-6" />
+                      <span className="text-[9px]">Preview</span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 space-y-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isLoading}
+                      onChange={handleImageFileChange}
+                      className="w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400 file:cursor-pointer cursor-pointer bg-slate-950 p-1.5 rounded-lg border border-slate-800"
+                    />
+                    <p className="text-[10px] text-slate-400">
+                      Selecting an image uploads directly to <code className="text-amber-300">client-images</code> bucket as <code className="text-amber-300">Date.now()-file.name</code> and inserts record to <code className="text-amber-300">rich_girls</code>.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Upload Status / Loading Indicator */}
+                {isLoading && (
+                  <div className="flex items-center space-x-2 py-1.5 px-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs animate-pulse">
+                    <Loader2 className="w-4 h-4 animate-spin text-amber-400 shrink-0" />
+                    <span>Uploading to Supabase storage & inserting to rich_girls table...</span>
+                  </div>
+                )}
+
+                {publicUrl && (
+                  <div className="text-[10px] text-emerald-400 break-all bg-emerald-950/40 p-2 rounded border border-emerald-500/30">
+                    <span className="font-semibold">Public URL:</span> {publicUrl}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -564,7 +744,7 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
                   type="text"
                   value={newLocation}
                   onChange={(e) => setNewLocation(e.target.value)}
-                  placeholder="e.g. London &amp; Geneva"
+                  placeholder="e.g. London & Geneva"
                   className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none"
                 />
               </div>
@@ -637,16 +817,19 @@ export const AdminClientsPage: React.FC<AdminClientsPageProps> = ({ onNavigate }
               <div className="pt-3 flex items-center justify-end space-x-2">
                 <button
                   type="button"
+                  disabled={isLoading}
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300"
+                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold"
+                  disabled={isLoading}
+                  className="px-5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold hover:brightness-110 transition-all flex items-center space-x-2 cursor-pointer disabled:opacity-50"
                 >
-                  Save to Clients Table
+                  {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{isLoading ? 'Uploading & Saving...' : 'Save to Clients Table'}</span>
                 </button>
               </div>
             </form>

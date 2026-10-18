@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Consultation } from '../types';
 import { saveConsultation } from '../lib/matchmakingStorage';
+import { ViralShareBar } from '../components/ViralShareBar';
 
 interface MatchmakingLandingPageProps {
   onNavigate: (path: string) => void;
@@ -360,6 +361,18 @@ export const MatchmakingLandingPage: React.FC<MatchmakingLandingPageProps> = ({ 
               Enter your dedicated, encrypted chatroom (`/chat/[matchId]`). Monitored by concierge for supreme safety and quality.
             </p>
           </div>
+        </div>
+
+        {/* Viral Share Incentive Bar */}
+        <div className="mt-10">
+          <ViralShareBar
+            title="RichConnect Private Circle"
+            text="The private circle where Monaco millionaires seek African queens. 31 countries. Join here:"
+            storyId="post-1"
+            referralCode="MONACO_VIP"
+            category="general"
+            onNavigate={onNavigate}
+          />
         </div>
       </section>
 

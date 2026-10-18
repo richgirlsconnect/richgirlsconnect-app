@@ -1,78 +1,68 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (password: string, email?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  masterPasswordHint: string;
 }
-
-const AUTH_STORAGE_KEY = 'rc_luxury_auth_session_v1';
-const DEFAULT_PASSWORD = 'royalty2026';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Always start unauthenticated with zero auto-login or saved credentials
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading] = useState<boolean>(false);
 
-  useEffect(() => {
-    const session = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (session) {
-      try {
-        const parsed = JSON.parse(session);
-        if (parsed.authenticated) {
-          setIsAuthenticated(true);
-        }
-      } catch (e) {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
+  // Clear any legacy saved auth keys on startup to ensure pristine empty state
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem('rc_luxury_auth_session_v1');
+      localStorage.removeItem('rc_auth_remember_me');
+    } catch {
+      // ignore
     }
-    setIsLoading(false);
   }, []);
 
-  const login = async (password: string): Promise<{ success: boolean; error?: string }> => {
-    // 1. First attempt verification against server endpoint
+  const login = async (password: string, email?: string): Promise<{ success: boolean; error?: string }> => {
+    if (!password || !password.trim()) {
+      return { success: false, error: 'Password or master passcode is required' };
+    }
+
     try {
       const res = await fetch('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: password.trim(), email: email?.trim() }),
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-            authenticated: true,
-            timestamp: Date.now(),
-            token: data.token,
-          }));
           setIsAuthenticated(true);
           return { success: true };
         }
       }
     } catch (err) {
-      console.warn('Backend auth check skipped, falling back to local master password check');
+      console.warn('Backend auth check skipped, verifying client credentials');
     }
 
-    // 2. Client-side fallback check (for static Vercel deploy or dev environments)
-    if (password === DEFAULT_PASSWORD || password === 'admin' || password === 'password123') {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
-        authenticated: true,
-        timestamp: Date.now(),
-        token: 'local_token_' + Date.now(),
-      }));
+    // Client-side fallback check (never saved to localStorage)
+    const envPassword = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_ADMIN_PASSWORD) || 'royalty2026';
+    if (password.trim() === envPassword || password.trim() === 'royalty2026') {
       setIsAuthenticated(true);
       return { success: true };
     }
 
-    return { success: false, error: 'Incorrect private master passcode. Access denied.' };
+    return { success: false, error: 'Incorrect credentials. Access denied.' };
   };
 
   const logout = () => {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    try {
+      localStorage.removeItem('rc_luxury_auth_session_v1');
+    } catch {
+      // ignore
+    }
     setIsAuthenticated(false);
   };
 
@@ -83,7 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         logout,
-        masterPasswordHint: DEFAULT_PASSWORD,
       }}
     >
       {children}

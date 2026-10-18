@@ -19,6 +19,17 @@ import { PrivateChatPage } from './pages/PrivateChatPage';
 import { SwipeDeckPage } from './pages/SwipeDeckPage';
 import { VideoCallPage } from './pages/VideoCallPage';
 import { AutonomousAgentsHubPage } from './pages/AutonomousAgentsHubPage';
+import { ClientPortalPage } from './pages/ClientPortalPage';
+import { AiHunterPage } from './pages/AiHunterPage';
+import { JoinCirclePage } from './pages/JoinCirclePage';
+import { AdminMarketerPage } from './pages/AdminMarketerPage';
+import { MarketplacePage } from './pages/MarketplacePage';
+import { PricingPage } from './pages/PricingPage';
+import { LoveChannelPage } from './pages/LoveChannelPage';
+import { AdminSocialCommandPage } from './pages/AdminSocialCommandPage';
+import { SocialSharePreviewPage } from './pages/SocialSharePreviewPage';
+import { LoveTvPage } from './pages/LoveTvPage';
+import { AdminLoveTvPage } from './pages/AdminLoveTvPage';
 import { OnboardingModal } from './components/OnboardingModal';
 import { AddGirlModal } from './components/AddGirlModal';
 import { SupabaseModal } from './components/SupabaseModal';
@@ -117,22 +128,84 @@ function MainAppContent({
     );
   }
 
-  // Public and VIP member routes
+  // Public and VIP member routes (accessible without admin credentials)
   const isPublicMatchmakingRoute = 
     currentPath === '/matchmaking' || 
     currentPath === '/apply' || 
     currentPath === '/swipe' ||
     currentPath === '/agents' ||
     currentPath === '/video-call' ||
-    currentPath.startsWith('/chat/');
+    currentPath.startsWith('/chat/') ||
+    currentPath.startsWith('/client') ||
+    currentPath.startsWith('/join') ||
+    currentPath.startsWith('/marketplace') ||
+    currentPath.startsWith('/pricing') ||
+    currentPath.startsWith('/love-channel') ||
+    currentPath.startsWith('/social-share') ||
+    currentPath.startsWith('/love-tv');
 
   // Not authenticated and trying to access protected CRM or Admin? Show Login Page
   if (!isAuthenticated && !isPublicMatchmakingRoute) {
-    return <LoginPage onSuccess={() => navigate(currentPath || '/')} />;
+    return <LoginPage onSuccess={() => navigate(currentPath || '/')} onNavigate={navigate} />;
   }
 
   // Determine current page component
   const renderCurrentPage = () => {
+    // Love TV - AI Live Reality Show (/love-tv)
+    if (currentPath === '/love-tv' || currentPath.startsWith('/love-tv')) {
+      return <LoveTvPage onNavigate={navigate} />;
+    }
+
+    // Love TV Executive Studio (/admin/love-tv)
+    if (currentPath === '/admin/love-tv' || currentPath === '/admin/tv') {
+      return <AdminLoveTvPage onNavigate={navigate} />;
+    }
+
+    // Social Media Viral Command Center (/admin/social-command)
+    if (currentPath === '/admin/social-command' || currentPath === '/social-command') {
+      return <AdminSocialCommandPage onNavigate={navigate} />;
+    }
+
+    // 9:16 Social Story Share Preview with QR Code (/social-share)
+    if (currentPath.startsWith('/social-share')) {
+      return <SocialSharePreviewPage onNavigate={navigate} />;
+    }
+
+    // Private Love Channel for Couples (/love-channel)
+    if (currentPath === '/love-channel' || currentPath.startsWith('/love-channel')) {
+      return <LoveChannelPage onNavigate={navigate} />;
+    }
+
+    // Membership Plans & Freemium Smart Paywall (/pricing)
+    if (currentPath.startsWith('/pricing')) {
+      return <PricingPage onNavigate={navigate} />;
+    }
+
+    // Public Global Girl Discovery & Join Funnel (/join and /join/:city)
+    if (currentPath.startsWith('/join')) {
+      return <JoinCirclePage onNavigate={navigate} />;
+    }
+
+    // Digital Products Marketplace & Money Engine
+    if (currentPath === '/marketplace' || currentPath.startsWith('/marketplace')) {
+      return <MarketplacePage onNavigate={navigate} />;
+    }
+
+    // AI Marketer & Viral Content Engine
+    if (currentPath === '/admin/marketer' || currentPath === '/marketer') {
+      return <AdminMarketerPage onNavigate={navigate} />;
+    }
+
+    // Client-Facing Portal (Accessible without admin login)
+    if (currentPath.startsWith('/client')) {
+      return <ClientPortalPage onNavigate={navigate} />;
+    }
+
+    // AI Girls Hunter & Scouter
+    if (currentPath === '/hunter' || currentPath === '/admin/hunter') {
+      return <AiHunterPage onNavigate={navigate} />;
+    }
+
     // Autonomous Multi-Agent & Elite Dating Routes
     if (currentPath === '/swipe') {
       return <SwipeDeckPage onNavigate={navigate} />;
