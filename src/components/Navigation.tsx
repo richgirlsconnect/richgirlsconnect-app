@@ -167,7 +167,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center space-x-1">
+          <nav className="hidden lg:flex items-center space-x-1 overflow-x-auto max-w-[52vw] xl:max-w-none scrollbar-none py-1">
             {activeNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentPath === item.path || (item.path !== '/' && currentPath.startsWith(item.path));

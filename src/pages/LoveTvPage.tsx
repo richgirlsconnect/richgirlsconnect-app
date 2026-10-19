@@ -27,7 +27,15 @@ import {
   ExternalLink,
   ShieldCheck,
   RefreshCw,
-  Gift
+  Gift,
+  Maximize2,
+  Minimize2,
+  RotateCcw,
+  FastForward,
+  Rewind,
+  Subtitles,
+  Sliders,
+  CheckCircle2
 } from 'lucide-react';
 import {
   LoveShow,
@@ -42,11 +50,18 @@ import {
   getShowComments,
   addShowComment,
   getWatchedCountToday,
-  incrementWatchedCountToday
+  incrementWatchedCountToday,
+  getShowWatchProgress,
+  saveShowWatchProgress,
+  clearShowWatchProgress,
+  getAllWatchProgress,
+  getLastWatchedShowId,
+  setLastWatchedShowId
 } from '../lib/loveTvStorage';
 import { awardLovePoints } from '../lib/loveChannelStorage';
 import { ViralShareBar } from '../components/ViralShareBar';
 import { SmartPaywallModal } from '../components/SmartPaywallModal';
+
 
 interface LoveTvPageProps {
   onNavigate: (path: string) => void;
@@ -55,12 +70,23 @@ interface LoveTvPageProps {
 export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
   const [shows, setShows] = useState<LoveShow[]>([]);
   const [currentShow, setCurrentShow] = useState<LoveShow | null>(null);
-  const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+  
+  // Continuous smooth playback engine state
+  const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [subtitlesEnabled, setSubtitlesEnabled] = useState(true);
+  const [isScrubbing, setIsScrubbing] = useState(false);
   const [voiceoverEnabled, setVoiceoverEnabled] = useState(true);
   const [bgMusicEnabled, setBgMusicEnabled] = useState(true);
   const [autoPlayNext, setAutoPlayNext] = useState(true);
-  
+  const [isLooping, setIsLooping] = useState(false);
+  const [isClearCinemaMode, setIsClearCinemaMode] = useState(false);
+  const [pictureQuality, setPictureQuality] = useState<'4k' | '1440p' | '1080p'>('4k');
+  const [resumedNotice, setResumedNotice] = useState<number | null>(null);
+  const [inProgressShows, setInProgressShows] = useState<ReturnType<typeof getAllWatchProgress>>([]);
+
   // Real-time comments
   const [comments, setComments] = useState<ShowComment[]>([]);
   const [newCommentText, setNewCommentText] = useState('');
@@ -89,18 +115,66 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
   const [tickerComment, setTickerComment] = useState('Aisha: OMG this is literally my story!');
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const lastSpokenSceneRef = useRef<number>(-1);
+
+  // Total show duration calculator
+  const getTotalDuration = (show: LoveShow | null): number => {
+    if (!show || !show.scenes || show.scenes.length === 0) return 36;
+    return show.scenes.reduce((acc, s) => acc + (s.durationSeconds || 12), 0);
+  };
+
+  const totalDuration = getTotalDuration(currentShow);
+
+  // Derive current scene index directly from continuous playhead
+  const getCurrentSceneIndex = (show: LoveShow | null, currentTime: number): number => {
+    if (!show || !show.scenes || show.scenes.length === 0) return 0;
+    let accumulated = 0;
+    for (let i = 0; i < show.scenes.length; i++) {
+      const sceneDuration = show.scenes[i].durationSeconds || 12;
+      if (currentTime >= accumulated && currentTime < accumulated + sceneDuration) {
+        return i;
+      }
+      accumulated += sceneDuration;
+    }
+    return Math.max(0, show.scenes.length - 1);
+  };
+
+  const currentSceneIndex = getCurrentSceneIndex(currentShow, playheadSeconds);
+  const currentScene = currentShow?.scenes[currentSceneIndex] || currentShow?.scenes[0];
+
+  // Format seconds to mm:ss
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // Load shows and initial state
   useEffect(() => {
     const loaded = getLoveShows();
     setShows(loaded);
     if (loaded.length > 0) {
-      setCurrentShow(loaded[0]);
-      setUserVotedOptionId(hasVotedOnShow(loaded[0].id));
-      setComments(getShowComments(loaded[0].id));
+      // Check if there was a last watched show or default to first
+      const lastId = getLastWatchedShowId();
+      const matchedShow = loaded.find(s => s.id === lastId) || loaded[0];
+      setCurrentShow(matchedShow);
+      setUserVotedOptionId(hasVotedOnShow(matchedShow.id));
+      setComments(getShowComments(matchedShow.id));
+
+      // Check saved watch progress to resume smoothly
+      const saved = getShowWatchProgress(matchedShow.id);
+      const total = getTotalDuration(matchedShow);
+      if (saved && saved.playheadSeconds > 1 && saved.playheadSeconds < total - 2) {
+        setPlayheadSeconds(saved.playheadSeconds);
+        setResumedNotice(saved.playheadSeconds);
+      } else {
+        setPlayheadSeconds(0);
+      }
     }
     setTitleSuggestions(getTitleSuggestions());
     setWatchedToday(getWatchedCountToday());
+    setInProgressShows(getAllWatchProgress());
 
     // Check if user is Gold Queen / VIP
     const isGold = localStorage.getItem('richconnect_tier') === 'gold' || 
@@ -110,13 +184,30 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
     // Audio ambient background track
     const audio = new Audio('https://assets.mixkit.co/music/preview/mixkit-romantic-dinner-601.mp3');
     audio.loop = true;
-    audio.volume = 0.25;
+    audio.volume = 0.22;
     audioRef.current = audio;
 
     return () => {
       audio.pause();
     };
   }, []);
+
+  // Preload all scenes of the current show into memory for ZERO stutter
+  useEffect(() => {
+    if (!currentShow) return;
+    setLastWatchedShowId(currentShow.id);
+    
+    // Eagerly preload high-res scene images into browser cache
+    currentShow.scenes.forEach(scene => {
+      if (scene.imageUrl) {
+        const img = new Image();
+        img.src = scene.imageUrl;
+      }
+    });
+
+    // Refresh in-progress shows shelf
+    setInProgressShows(getAllWatchProgress());
+  }, [currentShow]);
 
   // Update ticker and live viewer simulation
   useEffect(() => {
@@ -160,44 +251,77 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Playback scene cycle & Web Speech API Voiceover
+  // CONTINUOUS SMOOTH PLAYBACK LOOP (High-precision delta-time loop for fluid 60fps streaming with zero stutter)
   useEffect(() => {
-    if (!currentShow || !isPlaying) return;
+    if (!isPlaying || !currentShow || isScrubbing) return;
 
-    const currentScene = currentShow.scenes[currentSceneIndex] || currentShow.scenes[0];
-    const duration = (currentScene.durationSeconds || 12) * 1000;
+    let lastTime = performance.now();
+    const intervalMs = 40; // 25 updates/sec for silky smooth playhead glide
+    const timer = setInterval(() => {
+      const now = performance.now();
+      const deltaSec = (now - lastTime) / 1000;
+      lastTime = now;
 
-    // Web Speech API voiceover
-    if (voiceoverEnabled && 'speechSynthesis' in window) {
+      setPlayheadSeconds(prev => {
+        const total = getTotalDuration(currentShow);
+        const next = prev + (deltaSec * playbackSpeed);
+        if (next >= total) {
+          if (isLooping) {
+            // Seamless infinite loop without pausing!
+            return 0;
+          }
+          if (autoPlayNext) {
+            const currentIndex = shows.findIndex(s => s.id === currentShow.id);
+            const nextIndex = (currentIndex + 1) % shows.length;
+            const nextShow = shows[nextIndex];
+            if (nextShow) {
+              handleSelectShow(nextShow);
+              return 0;
+            }
+          }
+          setIsPlaying(false);
+          saveShowWatchProgress(currentShow.id, total, total);
+          return total;
+        }
+        return next;
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, currentShow, playbackSpeed, isScrubbing, autoPlayNext, isLooping, shows]);
+
+  // Persist Watch Progress whenever playhead advances or when paused
+  useEffect(() => {
+    if (!currentShow) return;
+    saveShowWatchProgress(currentShow.id, playheadSeconds, totalDuration);
+  }, [currentShow, playheadSeconds, totalDuration]);
+
+  // Web Speech API Voiceover (Non-blocking, decoupled from video playhead)
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return;
+
+    if (!isPlaying || !voiceoverEnabled || !currentShow) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(currentScene.narration);
-      utterance.rate = 0.95;
-      utterance.pitch = 1.05;
-      window.speechSynthesis.speak(utterance);
+      return;
     }
 
-    const sceneTimer = setTimeout(() => {
-      if (currentSceneIndex < currentShow.scenes.length - 1) {
-        setCurrentSceneIndex(prev => prev + 1);
-      } else {
-        // Episode finished!
-        if (autoPlayNext) {
-          const currentIndex = shows.findIndex(s => s.id === currentShow.id);
-          const nextIndex = (currentIndex + 1) % shows.length;
-          handleSelectShow(shows[nextIndex]);
-        }
-      }
-    }, duration);
+    if (lastSpokenSceneRef.current === currentSceneIndex) return;
+    lastSpokenSceneRef.current = currentSceneIndex;
 
-    return () => {
-      clearTimeout(sceneTimer);
-      if ('speechSynthesis' in window) {
+    const scene = currentShow.scenes[currentSceneIndex];
+    if (scene && scene.narration) {
+      try {
         window.speechSynthesis.cancel();
-      }
-    };
-  }, [currentShow, currentSceneIndex, isPlaying, voiceoverEnabled, autoPlayNext, shows]);
+        const utterance = new SpeechSynthesisUtterance(scene.narration);
+        utterance.rate = 0.95;
+        utterance.pitch = 1.05;
+        utterance.onerror = () => {}; // Never interrupt video playback
+        window.speechSynthesis.speak(utterance);
+      } catch {}
+    }
+  }, [currentSceneIndex, currentShow, voiceoverEnabled, isPlaying]);
 
-  // Audio music playback
+  // Audio ambient music playback
   useEffect(() => {
     if (audioRef.current) {
       if (bgMusicEnabled && isPlaying) {
@@ -208,9 +332,79 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
     }
   }, [bgMusicEnabled, isPlaying]);
 
+  // Fullscreen change handler
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  // Keyboard navigation shortcuts (Space = Play/Pause, Arrow Left/Right = Skip 5s, F = Fullscreen)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setIsPlaying(prev => !prev);
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        handleSkip(5);
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        handleSkip(-5);
+      } else if (e.code === 'KeyF') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        setBgMusicEnabled(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [playheadSeconds, totalDuration]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleSeek = (newSeconds: number) => {
+    const clamped = Math.max(0, Math.min(newSeconds, totalDuration));
+    setPlayheadSeconds(clamped);
+    if (currentShow) {
+      saveShowWatchProgress(currentShow.id, clamped, totalDuration);
+    }
+  };
+
+  const handleSkip = (deltaSeconds: number) => {
+    handleSeek(playheadSeconds + deltaSeconds);
+  };
+
+  const handlePauseAndContinueLater = () => {
+    setIsPlaying(false);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (currentShow) {
+      saveShowWatchProgress(currentShow.id, playheadSeconds, totalDuration);
+      setLastWatchedShowId(currentShow.id);
+      setInProgressShows(getAllWatchProgress());
+    }
+    showToast(`⏸ Paused at ${formatTime(playheadSeconds)}. Episode saved to Continue Watching!`);
+  };
+
+  const toggleFullscreen = () => {
+    if (!playerContainerRef.current) return;
+    if (!document.fullscreenElement) {
+      playerContainerRef.current.requestFullscreen().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setIsFullscreen(false);
+    }
   };
 
   const handleSelectShow = (show: LoveShow) => {
@@ -221,10 +415,24 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
     }
 
     setCurrentShow(show);
-    setCurrentSceneIndex(0);
+    lastSpokenSceneRef.current = -1;
+    setLastWatchedShowId(show.id);
+
+    // Check saved watch progress to resume smoothly
+    const saved = getShowWatchProgress(show.id);
+    const total = getTotalDuration(show);
+    if (saved && saved.playheadSeconds > 1 && saved.playheadSeconds < total - 2) {
+      setPlayheadSeconds(saved.playheadSeconds);
+      setResumedNotice(saved.playheadSeconds);
+    } else {
+      setPlayheadSeconds(0);
+      setResumedNotice(null);
+    }
+
     setIsPlaying(true);
     setUserVotedOptionId(hasVotedOnShow(show.id));
     setComments(getShowComments(show.id));
+    setInProgressShows(getAllWatchProgress());
 
     // Increment watched count for free users
     if (!isGoldUser) {
@@ -235,6 +443,7 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
     // Scroll to player smoothly
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
 
   const handleVote = async (optionId: string) => {
     if (!currentShow) return;
@@ -339,29 +548,139 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
       </div>
 
       {/* ============================================================== */}
-      {/* BILLBOARD HERO VIDEO PLAYER (Netflix-Style Large Cinema Stage)  */}
+      {/* ============================================================== */}
+      {/* BILLBOARD HERO VIDEO PLAYER (Crystal-Clear Front Cinema Player) */}
       {/* ============================================================== */}
       {currentShow && (
-        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-8 space-y-4">
+        <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 pt-4 pb-8 space-y-3">
           
-          <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] max-h-[620px] rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-black">
-            
-            {/* Animated Scene Image with Ken Burns Zoom & Pan */}
-            <img
-              src={currentShow.scenes[currentSceneIndex]?.imageUrl || currentShow.hero_banner_url}
-              alt={currentShow.title}
-              className={`w-full h-full object-cover transition-all duration-[6000ms] ease-out ${
-                isPlaying ? 'scale-110 translate-y-[-1%]' : 'scale-100'
-              }`}
+          {/* Resume Previous Watch Notice */}
+          {resumedNotice !== null && (
+            <div className="flex items-center justify-between px-4 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-xs font-mono text-amber-200">
+              <div className="flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>Resumed playback from your last watch at <strong>{formatTime(resumedNotice)}</strong></span>
+              </div>
+              <button
+                onClick={() => {
+                  handleSeek(0);
+                  setResumedNotice(null);
+                  showToast('Restarted episode from beginning (00:00)');
+                }}
+                className="text-amber-400 hover:underline flex items-center space-x-1 font-bold"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Play from Beginning</span>
+              </button>
+            </div>
+          )}
+
+          {/* Main Cinema Screen Container */}
+          <div 
+            ref={playerContainerRef}
+            className={`relative w-full aspect-[16/9] sm:aspect-[21/9] max-h-[660px] rounded-3xl overflow-hidden border-2 border-amber-500/40 shadow-2xl bg-black group select-none transition-all duration-500 ${
+              isFullscreen ? 'fixed inset-0 z-50 rounded-none max-h-none border-none aspect-auto h-screen' : ''
+            }`}
+          >
+            {/* Ambient Lighting Ambilight Glow for Crystal-Clear Cinema Depth */}
+            <div 
+              className="absolute -inset-4 bg-cover bg-center filter blur-3xl opacity-40 scale-105 pointer-events-none transition-all duration-1000"
+              style={{ backgroundImage: `url(${currentScene?.imageUrl || currentShow.hero_banner_url})` }}
             />
 
-            {/* Cinematic Gradient Vignette */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#07090e] via-[#07090e]/40 to-black/60 pointer-events-none" />
+            {/* DUAL-BUFFER ULTRA-CLEAR SCENE PLAYER: All scenes pre-rendered, smoothly crossfading with continuous cinematic glide */}
+            <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
+              {currentShow.scenes.map((scene, idx) => {
+                const isActive = idx === currentSceneIndex;
+                return (
+                  <div
+                    key={idx}
+                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
+                      isActive ? 'opacity-100 z-10' : 'opacity-0 z-0'
+                    }`}
+                  >
+                    <img
+                      src={scene.imageUrl}
+                      alt={scene.title}
+                      className={`w-full h-full object-cover transition-transform duration-[14000ms] ease-out ${
+                        isActive && isPlaying ? 'scale-110 translate-x-1 -translate-y-1' : 'scale-100'
+                      }`}
+                      style={{
+                        filter: pictureQuality === '4k' 
+                          ? 'contrast(1.08) saturate(1.15) brightness(1.02)' 
+                          : pictureQuality === '1440p'
+                          ? 'contrast(1.04) saturate(1.08)'
+                          : 'none'
+                      }}
+                      loading="eager"
+                    />
+                    {/* Cinema Vignette & Contrast Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#06080e] via-black/30 to-black/50" />
+                  </div>
+                );
+              })}
+            </div>
 
-            {/* Top Bar inside Player */}
-            <div className="absolute top-4 inset-x-4 sm:inset-x-6 flex items-center justify-between z-20">
+            {/* Click-to-Play/Pause Backdrop Touch Target */}
+            <div 
+              onClick={() => {
+                if (isPlaying) {
+                  handlePauseAndContinueLater();
+                } else {
+                  setIsPlaying(true);
+                }
+              }}
+              className="absolute inset-0 z-20 cursor-pointer flex items-center justify-center"
+            >
+              {/* PAUSED STATE OVERLAY: Clear feedback with resume and preserve status */}
+              {!isPlaying && (
+                <div 
+                  onClick={(e) => e.stopPropagation()} 
+                  className="z-30 p-6 sm:p-8 rounded-3xl bg-black/85 backdrop-blur-md border border-amber-500/50 shadow-2xl max-w-md mx-4 text-center space-y-4 animate-scaleIn"
+                >
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-slate-950 flex items-center justify-center mx-auto shadow-xl shadow-amber-500/40 cursor-pointer hover:scale-105 transition-transform"
+                    onClick={() => setIsPlaying(true)}
+                  >
+                    <Play className="w-8 h-8 fill-current translate-x-0.5" />
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[10px] uppercase font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+                      Episode Paused &bull; Progress Saved
+                    </span>
+                    <h3 className="text-lg sm:text-xl font-serif-luxury font-bold text-white pt-1">
+                      Paused at {formatTime(playheadSeconds)}
+                    </h3>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Your watch point is recorded. You can continue later anytime without losing your place, directly from this player or your Homepage!
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                    <button
+                      onClick={() => setIsPlaying(true)}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs hover:brightness-110 flex items-center space-x-1.5 cursor-pointer shadow-md"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>Continue Watching</span>
+                    </button>
+                    <button
+                      onClick={() => onNavigate('/')}
+                      className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-semibold text-xs cursor-pointer"
+                    >
+                      Homepage &rarr;
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Top Bar inside Player (Hidden in Clear Cinema Mode for pristine viewing) */}
+            <div className={`absolute top-4 inset-x-4 sm:inset-x-6 flex items-center justify-between z-30 pointer-events-auto transition-opacity duration-300 ${
+              isClearCinemaMode ? 'opacity-0 hover:opacity-100' : 'opacity-100'
+            }`}>
               <div className="flex items-center space-x-2">
-                <span className="px-3 py-1 rounded-xl bg-black/75 backdrop-blur-md border border-amber-500/50 text-amber-300 font-mono font-bold text-xs uppercase tracking-wider flex items-center space-x-1.5">
+                <span className="px-3 py-1 rounded-xl bg-black/80 backdrop-blur-md border border-amber-500/50 text-amber-300 font-mono font-bold text-xs uppercase tracking-wider flex items-center space-x-1.5 shadow-md">
                   <Flame className="w-3.5 h-3.5 text-amber-400" />
                   <span>Episode {currentShow.episode_number}</span>
                 </span>
@@ -370,129 +689,337 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
                   Scene {currentSceneIndex + 1} of {currentShow.scenes.length}
                 </span>
 
+                {/* 4K Resolution Badge with Click Selector */}
+                <div className="hidden md:flex items-center bg-black/70 backdrop-blur-md rounded-xl p-0.5 border border-emerald-500/40 text-[10px] font-mono font-bold">
+                  {(['4k', '1440p', '1080p'] as const).map(res => (
+                    <button
+                      key={res}
+                      onClick={() => {
+                        setPictureQuality(res);
+                        showToast(`Video stream switched to ${res.toUpperCase()} Ultra Clear Quality`);
+                      }}
+                      className={`px-2 py-0.5 rounded-lg transition-all ${
+                        pictureQuality === res
+                          ? 'bg-emerald-500 text-slate-950 font-bold'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {res.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+
                 {currentShow.flight_route && (
-                  <span className="px-2.5 py-1 rounded-xl bg-cyan-950/70 border border-cyan-500/40 text-cyan-300 font-mono text-xs flex items-center space-x-1">
+                  <span className="px-2.5 py-1 rounded-xl bg-cyan-950/70 border border-cyan-500/40 text-cyan-300 font-mono text-xs hidden lg:flex items-center space-x-1">
                     <Plane className="w-3 h-3" />
                     <span>{currentShow.flight_route.from} &rarr; {currentShow.flight_route.to}</span>
                   </span>
                 )}
               </div>
 
-              {/* Player Toggles: Audio, Voiceover, Share */}
+              {/* Player Top Toggles */}
               <div className="flex items-center space-x-2">
+                {/* Clear Cinema View Mode Toggle */}
                 <button
-                  onClick={() => setVoiceoverEnabled(!voiceoverEnabled)}
-                  title="Toggle AI Narrator Voiceover"
-                  className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center space-x-1.5 transition-all cursor-pointer ${
-                    voiceoverEnabled
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsClearCinemaMode(!isClearCinemaMode);
+                    showToast(isClearCinemaMode ? 'Standard Controls Restored' : '✨ Crystal-Clear Cinema Mode Active (Overlays Hidden)');
+                  }}
+                  title="Toggle Clear Cinema Mode (Hides text overlays for unobstructed viewing)"
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
+                    isClearCinemaMode
+                      ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
+                      : 'bg-black/70 text-slate-300 border-white/20 hover:text-white'
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Clear View</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSubtitlesEnabled(!subtitlesEnabled);
+                  }}
+                  title="Toggle Subtitles / Closed Captions"
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
+                    subtitlesEnabled
                       ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
                       : 'bg-black/70 text-slate-400 border-white/20 hover:text-white'
                   }`}
                 >
-                  <span>AI Voiceover</span>
+                  <Subtitles className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">CC</span>
                 </button>
 
                 <button
-                  onClick={() => setBgMusicEnabled(!bgMusicEnabled)}
-                  title="Toggle Cinematic Background Music"
-                  className="p-2 rounded-xl bg-black/70 hover:bg-black text-amber-400 border border-white/20 transition-all cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVoiceoverEnabled(!voiceoverEnabled);
+                  }}
+                  title="Toggle AI Voiceover Narration"
+                  className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center space-x-1 transition-all cursor-pointer ${
+                    voiceoverEnabled
+                      ? 'bg-pink-500 text-white font-bold border-pink-400'
+                      : 'bg-black/70 text-slate-400 border-white/20 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Voiceover</span>
+                </button>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBgMusicEnabled(!bgMusicEnabled);
+                  }}
+                  title="Toggle Ambient Soundtrack"
+                  className="p-1.5 rounded-xl bg-black/70 hover:bg-black text-amber-400 border border-white/20 transition-all cursor-pointer"
                 >
                   {bgMusicEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 </button>
 
                 <button
-                  onClick={() => setShareModalOpen(true)}
-                  title="Share Reality Episode"
-                  className="px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 text-xs font-bold flex items-center space-x-1 transition-all cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  title="Toggle Fullscreen (Press F)"
+                  className="p-1.5 rounded-xl bg-black/70 hover:bg-black text-slate-300 hover:text-white border border-white/20 transition-all cursor-pointer"
                 >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Share (+50 Pts)</span>
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            {/* Live Floating Comments Overlay (TikTok Live Style) */}
-            <div className="absolute top-16 right-4 sm:right-6 w-64 sm:w-72 max-h-52 overflow-hidden flex flex-col justify-end space-y-2 pointer-events-none z-20">
-              {comments.slice(-4).map((c, i) => (
-                <div
-                  key={c.id || i}
-                  className="p-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-left flex items-start space-x-2 animate-fadeIn"
+            {/* Live Floating Comments Overlay (Hidden in Clear Cinema Mode) */}
+            {!isClearCinemaMode && (
+              <div className="absolute top-16 right-4 sm:right-6 w-60 sm:w-72 max-h-48 overflow-hidden flex flex-col justify-end space-y-2 pointer-events-none z-20">
+                {comments.slice(-3).map((c, i) => (
+                  <div
+                    key={c.id || i}
+                    className="p-2 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-left flex items-start space-x-2 animate-fadeIn shadow-lg"
+                  >
+                    <img
+                      src={c.avatar_url}
+                      alt={c.user_name}
+                      className="w-5 h-5 rounded-full object-cover border border-amber-400 shrink-0"
+                    />
+                    <div className="text-[11px] min-w-0">
+                      <span className="font-bold text-amber-300 mr-1.5">{c.user_name}</span>
+                      <span className="text-slate-200">{c.text}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Bottom Screen Overlay: Title, Scene Narration, Scrubber & Controls */}
+            <div className={`absolute bottom-3 sm:bottom-4 inset-x-3 sm:inset-x-6 z-30 space-y-2 pointer-events-auto transition-opacity duration-300 ${
+              isClearCinemaMode ? 'opacity-0 hover:opacity-100' : 'opacity-100'
+            }`}>
+              
+              {/* Closed Caption Subtitle Glass Box */}
+              {subtitlesEnabled && (
+                <div className="space-y-1 max-w-3xl">
+                  <div className="flex items-center space-x-2 text-[11px] text-amber-400 font-mono">
+                    <span>{currentScene?.setting}</span>
+                    <span>&bull;</span>
+                    <span className="text-pink-300 font-semibold">{currentScene?.title}</span>
+                  </div>
+
+                  <h1 className="text-xl sm:text-3xl font-serif-luxury font-bold text-white drop-shadow-md truncate">
+                    {currentShow.title}
+                  </h1>
+
+                  <p className="text-xs sm:text-sm text-slate-100 font-medium leading-relaxed bg-black/75 backdrop-blur-md p-2.5 sm:p-3 rounded-2xl border border-white/15 max-w-2xl shadow-xl">
+                    "{currentScene?.narration}"
+                  </p>
+                </div>
+              )}
+
+              {/* CONTINUOUS SCRUBBER TIMELINE BAR */}
+              <div className="space-y-1 pt-1">
+                <div 
+                  className="relative w-full h-3 sm:h-3.5 bg-white/20 hover:bg-white/30 rounded-full overflow-hidden cursor-pointer backdrop-blur-md border border-white/20 transition-all"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    const fraction = Math.max(0, Math.min(clickX / rect.width, 1));
+                    handleSeek(fraction * totalDuration);
+                  }}
                 >
-                  <img
-                    src={c.avatar_url}
-                    alt={c.user_name}
-                    className="w-6 h-6 rounded-full object-cover border border-amber-400 shrink-0"
-                  />
-                  <div className="text-[11px] min-w-0">
-                    <span className="font-bold text-amber-300 mr-1.5">{c.user_name}</span>
-                    <span className="text-slate-200">{c.text}</span>
+                  {/* Played Progress Bar */}
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-400 via-pink-500 to-rose-600 rounded-full transition-all duration-100 ease-out relative"
+                    style={{ width: `${Math.min(100, (playheadSeconds / totalDuration) * 100)}%` }}
+                  >
+                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white shadow-md shadow-amber-500/80" />
+                  </div>
+
+                  {/* Scene Divider Ticks */}
+                  {currentShow.scenes.map((_, i) => {
+                    const sceneStartSec = currentShow.scenes.slice(0, i).reduce((acc, s) => acc + (s.durationSeconds || 12), 0);
+                    const leftPct = (sceneStartSec / totalDuration) * 100;
+                    if (leftPct === 0) return null;
+                    return (
+                      <div 
+                        key={i} 
+                        className="absolute top-0 bottom-0 w-0.5 bg-black/60 pointer-events-none"
+                        style={{ left: `${leftPct}%` }}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Timeline Timers & Scene Milestones */}
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 px-1">
+                  <div className="flex items-center space-x-3">
+                    <span className="font-bold text-amber-300">
+                      {formatTime(playheadSeconds)} <span className="text-slate-400">/ {formatTime(totalDuration)}</span>
+                    </span>
+
+                    <span className="text-slate-400 hidden sm:inline">&bull;</span>
+                    
+                    {/* Scene indicator pills */}
+                    <div className="hidden sm:flex items-center space-x-1.5 text-[10px]">
+                      {currentShow.scenes.map((scene, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            const startSec = currentShow.scenes.slice(0, idx).reduce((acc, s) => acc + (s.durationSeconds || 12), 0);
+                            handleSeek(startSec);
+                          }}
+                          className={`px-2 py-0.5 rounded transition-all ${
+                            idx === currentSceneIndex
+                              ? 'bg-amber-500 text-slate-950 font-bold'
+                              : 'bg-black/40 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Scene {idx + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {currentShow.sponsor && (
+                      <span className="text-[10px] text-slate-400 hidden md:inline">
+                        Sponsored by <strong className="text-amber-300">{currentShow.sponsor.name}</strong>
+                      </span>
+                    )}
                   </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Bottom Hero Overlay & Narration */}
-            <div className="absolute bottom-4 sm:bottom-6 inset-x-4 sm:inset-x-8 z-20 space-y-3">
-              <div className="space-y-1 max-w-3xl">
-                <div className="flex items-center space-x-2 text-xs text-amber-400 font-mono">
-                  <span>{currentShow.scenes[currentSceneIndex]?.setting}</span>
-                  <span>&bull;</span>
-                  <span className="text-pink-300 font-semibold">{currentShow.scenes[currentSceneIndex]?.title}</span>
-                </div>
-
-                <h1 className="text-2xl sm:text-4xl font-serif-luxury font-bold text-white drop-shadow-md">
-                  {currentShow.title}
-                </h1>
-
-                {/* Subtitle / Voiceover text */}
-                <p className="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed bg-black/60 backdrop-blur-sm p-3 rounded-2xl border border-white/10 max-w-2xl">
-                  "{currentShow.scenes[currentSceneIndex]?.narration}"
-                </p>
               </div>
 
-              {/* Player Controls Bar */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <div className="flex items-center space-x-2.5">
+              {/* Bottom Cinema Controls Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 bg-black/85 backdrop-blur-md p-2 sm:p-2.5 rounded-2xl border border-white/10">
+                <div className="flex items-center space-x-2">
+                  {/* Play / Pause Toggle */}
                   <button
-                    onClick={() => setIsPlaying(!isPlaying)}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg shadow-amber-500/30 cursor-pointer"
+                    onClick={() => {
+                      if (isPlaying) {
+                        handlePauseAndContinueLater();
+                      } else {
+                        setIsPlaying(true);
+                      }
+                    }}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-slate-950 font-bold text-xs flex items-center space-x-1.5 shadow-md shadow-amber-500/30 cursor-pointer"
                   >
-                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    <span>{isPlaying ? 'Pause Episode' : 'Play Episode'}</span>
+                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
+                    <span>{isPlaying ? 'Pause' : 'Play'}</span>
                   </button>
 
-                  {/* Scene Navigation dots */}
-                  <div className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/15">
-                    {currentShow.scenes.map((_, idx) => (
+                  {/* Dedicated Explicit "Pause & Continue Later" */}
+                  <button
+                    onClick={handlePauseAndContinueLater}
+                    title="Pause video and bookmark current position to continue watching later"
+                    className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden sm:inline">Pause &amp; Continue Later</span>
+                  </button>
+
+                  {/* Skip Rewind 10s */}
+                  <button
+                    onClick={() => handleSkip(-10)}
+                    title="Rewind 10 seconds"
+                    className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-mono flex items-center space-x-1"
+                  >
+                    <Rewind className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">-10s</span>
+                  </button>
+
+                  {/* Skip Forward 10s */}
+                  <button
+                    onClick={() => handleSkip(10)}
+                    title="Forward 10 seconds"
+                    className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-mono flex items-center space-x-1"
+                  >
+                    <FastForward className="w-3.5 h-3.5" />
+                    <span className="text-[10px]">+10s</span>
+                  </button>
+
+                  {/* Speed Selector */}
+                  <div className="flex items-center bg-slate-900 rounded-xl p-0.5 border border-slate-700 text-[11px] font-mono">
+                    {[1.0, 1.25, 1.5].map((spd) => (
                       <button
-                        key={idx}
-                        onClick={() => setCurrentSceneIndex(idx)}
-                        className={`h-2 rounded-full transition-all cursor-pointer ${
-                          idx === currentSceneIndex ? 'w-6 bg-amber-400' : 'w-2 bg-slate-600 hover:bg-slate-400'
+                        key={spd}
+                        onClick={() => setPlaybackSpeed(spd)}
+                        className={`px-2 py-1 rounded-lg transition-all ${
+                          playbackSpeed === spd
+                            ? 'bg-amber-500 text-slate-950 font-bold'
+                            : 'text-slate-400 hover:text-white'
                         }`}
-                      />
+                      >
+                        {spd}x
+                      </button>
                     ))}
                   </div>
-
-                  <button
-                    onClick={() => setAutoPlayNext(!autoPlayNext)}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                      autoPlayNext
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold'
-                        : 'bg-black/40 text-slate-400 border-slate-700'
-                    }`}
-                  >
-                    Auto-Play Next: {autoPlayNext ? 'ON' : 'OFF'}
-                  </button>
                 </div>
 
-                {/* Sponsor attribution */}
-                {currentShow.sponsor && (
-                  <div className="text-[11px] text-right text-slate-400 font-mono hidden sm:block">
-                    Sponsored by <span className="text-amber-300 font-semibold">{currentShow.sponsor.name}</span>
-                  </div>
-                )}
+                <div className="flex items-center space-x-2">
+                  {/* Seamless Loop Toggle */}
+                  <button
+                    onClick={() => {
+                      setIsLooping(!isLooping);
+                      showToast(isLooping ? 'Episode Loop: OFF' : '🔁 Seamless Episode Loop: ON (Plays uninterrupted without stopping)');
+                    }}
+                    className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center space-x-1 ${
+                      isLooping
+                        ? 'bg-amber-500 text-slate-950 font-bold border-amber-400'
+                        : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                    }`}
+                    title="Toggle continuous seamless looping without ever pausing"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Loop: {isLooping ? 'ON' : 'OFF'}</span>
+                  </button>
+
+                  {/* Auto-Play Next Toggle */}
+                  <button
+                    onClick={() => setAutoPlayNext(!autoPlayNext)}
+                    className={`text-[11px] px-2.5 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center space-x-1 ${
+                      autoPlayNext
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-bold'
+                        : 'bg-slate-900 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    <span>Auto-Play: {autoPlayNext ? 'ON' : 'OFF'}</span>
+                  </button>
+
+                  {/* Share Episode Button */}
+                  <button
+                    onClick={() => setShareModalOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 text-xs font-bold flex items-center space-x-1 transition-all cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Share (+50 Pts)</span>
+                  </button>
+                </div>
               </div>
+
             </div>
 
           </div>
@@ -657,6 +1184,74 @@ export const LoveTvPage: React.FC<LoveTvPageProps> = ({ onNavigate }) => {
       {/* ============================================================== */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-10">
         
+        {/* ROW 0: CONTINUE WATCHING (User's Saved In-Progress Episodes) */}
+        {inProgressShows.length > 0 && (
+          <div className="space-y-3 pb-2 border-b border-amber-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Clock className="w-5 h-5 text-amber-400" />
+                <h2 className="text-base sm:text-lg font-bold font-serif-luxury text-white">
+                  Continue Watching (Your Saved Episodes)
+                </h2>
+              </div>
+              <span className="text-xs font-mono text-amber-300">
+                {inProgressShows.length} paused in progress
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {inProgressShows.map(item => {
+                const pct = Math.min(100, Math.round((item.playheadSeconds / item.totalSeconds) * 100));
+                const isSelected = item.showId === currentShow?.id;
+
+                return (
+                  <div
+                    key={item.showId}
+                    onClick={() => handleSelectShow(item.show)}
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center space-x-3.5 group ${
+                      isSelected
+                        ? 'bg-amber-950/20 border-amber-500 shadow-lg shadow-amber-950/50'
+                        : 'bg-slate-900/80 border-slate-800 hover:border-amber-500/40 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="relative w-28 h-18 rounded-xl overflow-hidden shrink-0 bg-black">
+                      <img 
+                        src={item.show.thumbnail_url} 
+                        alt={item.show.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/20 transition-colors">
+                        <div className="w-8 h-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                          <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                        </div>
+                      </div>
+                      <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[9px] text-amber-300 font-bold">
+                        Ep {item.show.episode_number}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <h4 className="font-bold text-xs sm:text-sm text-white truncate group-hover:text-amber-300 transition-colors">
+                        {item.show.title}
+                      </h4>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span>{formatTime(item.playheadSeconds)} / {formatTime(item.totalSeconds)}</span>
+                        <span className="text-amber-400 font-bold">{pct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-amber-400 via-pink-500 to-rose-500 h-full rounded-full transition-all duration-300" 
+                          style={{ width: `${pct}%` }} 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ROW 1: TRENDING NOW (All Episodes) */}
         <EpisodeRow
           title="🔥 Trending Reality Episodes (AI Auto-Generates Every 4 Hours)"

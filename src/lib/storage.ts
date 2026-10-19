@@ -903,6 +903,21 @@ export const saveGirl = (girl: Girl): void => {
   localStorage.setItem(STORAGE_KEYS.GIRLS, JSON.stringify(updated));
 };
 
+export const saveGirlsBatch = (newGirls: Girl[]): void => {
+  const current = getGirls();
+  const existingMap = new Map<string, Girl>();
+  // Preserving existing
+  for (const g of current) {
+    existingMap.set(g.id, g);
+  }
+  // Upserting new girls
+  for (const ng of newGirls) {
+    existingMap.set(ng.id, ng);
+  }
+  const updated = Array.from(existingMap.values());
+  localStorage.setItem(STORAGE_KEYS.GIRLS, JSON.stringify(updated));
+};
+
 export const updateGirlStage = (id: string, stage: PipelineStage): void => {
   const current = getGirls();
   const updated = current.map(g => g.id === id ? { ...g, stage } : g);

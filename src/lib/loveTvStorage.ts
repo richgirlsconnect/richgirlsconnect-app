@@ -678,3 +678,75 @@ export const incrementWatchedCountToday = () => {
     count: current + 1
   }));
 };
+
+export interface WatchProgress {
+  showId: string;
+  playheadSeconds: number;
+  totalSeconds: number;
+  lastUpdated: number;
+}
+
+export const getShowWatchProgress = (showId: string): WatchProgress | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`rc_lovetv_progress_${showId}`);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+export const saveShowWatchProgress = (showId: string, playheadSeconds: number, totalSeconds: number): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`rc_lovetv_progress_${showId}`, JSON.stringify({
+      showId,
+      playheadSeconds: Math.max(0, Math.round(playheadSeconds * 10) / 10),
+      totalSeconds,
+      lastUpdated: Date.now()
+    }));
+  } catch {}
+};
+
+export const clearShowWatchProgress = (showId: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(`rc_lovetv_progress_${showId}`);
+  } catch {}
+};
+
+// Retrieve all in-progress Love TV episodes to resume seamlessly
+export const getAllWatchProgress = (): (WatchProgress & { show: LoveShow })[] => {
+  if (typeof window === 'undefined') return [];
+  const shows = getLoveShows();
+  const showsMap = new Map(shows.map(s => [s.id, s]));
+  const results: (WatchProgress & { show: LoveShow })[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('rc_lovetv_progress_')) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const item: WatchProgress = JSON.parse(raw);
+          const show = showsMap.get(item.showId);
+          if (show && item.playheadSeconds > 1 && item.playheadSeconds < item.totalSeconds - 1) {
+            results.push({ ...item, show });
+          }
+        }
+      }
+    }
+  } catch {}
+  return results.sort((a, b) => b.lastUpdated - a.lastUpdated);
+};
+
+export const getLastWatchedShowId = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('rc_lovetv_last_active_show');
+};
+
+export const setLastWatchedShowId = (showId: string): void => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('rc_lovetv_last_active_show', showId);
+};
+
